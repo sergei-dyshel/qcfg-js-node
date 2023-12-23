@@ -1,0 +1,17 @@
+{
+  "name": "@sergei-dyshel/node",
+  "version": "1.0.0",
+  "description": "Personal library for Node.js",
+  "main": "src/index.ts",
+  "scripts": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sergei-dyshel/qcfg-js-node.git"
+  },
+  "author": "Sergei Dyshel",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/sergei-dyshel/qcfg-js-node/issues"
+  },
+  "homepage": "https://github.com/sergei-dyshel/qcfg-js-node"
+}
