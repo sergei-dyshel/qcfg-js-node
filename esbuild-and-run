@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+cmd=$1
+shift
+
+npx tsx src/tools/esbuild.ts $cmd && exec bin/$cmd "$@"
