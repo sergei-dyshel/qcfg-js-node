@@ -2,7 +2,7 @@ import * as esbuild from "esbuild";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
-export async function esbuildCmd(cmd: string) {
+export async function esbuildCmd(cmd: string, cwd?: string) {
   const options: esbuild.BuildOptions = {
     entryPoints: [`src/cmd/${cmd}/main.ts`],
     outdir: "dist",
@@ -16,10 +16,11 @@ export async function esbuildCmd(cmd: string) {
     target: "es2022",
     sourcemap: true,
     keepNames: true,
+    absWorkingDir: cwd,
   };
 
   await esbuild.build(options);
-  const binPath = path.join("bin", cmd);
+  const binPath = path.join(cwd ?? "", "bin", cmd);
   await fs.writeFile(
     binPath,
     `#!/usr/bin/env bash

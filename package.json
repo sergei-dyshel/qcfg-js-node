@@ -22,7 +22,8 @@
   },
   "homepage": "https://github.com/sergei-dyshel/qcfg-js-node",
   "dependencies": {
-    "@sergei-dyshel/typescript": "sergei-dyshel/qcfg-js-typescript#87dac880"
+    "@sergei-dyshel/typescript": "sergei-dyshel/qcfg-js-typescript#87dac880",
+    "shlex": "^2.1.2"
   },
   "devDependencies": {
     "@sergei-dyshel/eslint-config": "sergei-dyshel/eslint-config#b8d3a6f9",

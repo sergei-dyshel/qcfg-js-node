@@ -1,9 +1,10 @@
 import { esbuildCmd } from "../esbuild-cmd";
 
-const cmd = process.argv[2];
+const cwd = process.argv[2];
+const cmd = process.argv[3];
 
 async function main() {
-  await esbuildCmd(cmd);
+  await esbuildCmd(cmd, cwd);
 }
 
 void main();

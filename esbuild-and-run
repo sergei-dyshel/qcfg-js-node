@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 
-cmd=$1
-shift
+set -e
 
-npx tsx src/tools/esbuild.ts $cmd && exec bin/$cmd "$@"
+cmd=$1
+
+cwd=$(pwd)
+
+# change to directory where script resides for tsx to work
+cd "$(dirname $(readlink -f $0))"
+npx tsx src/tools/esbuild.ts $cwd $cmd
+
+# change back to directory where script was executed from
+cd $cwd
+exec bin/$cmd "$@"
