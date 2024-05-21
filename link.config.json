@@ -1,3 +1,7 @@
 {
-  "packages": ["/Users/sergei/repos/eslint-config", "/Users/sergei/repos/qcfg-js-typescript"]
+  "packages": [
+    "/Users/sergei/repos/prettier-config",
+    "/Users/sergei/repos/eslint-config",
+    "/Users/sergei/repos/qcfg-js-typescript"
+  ]
 }

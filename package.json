@@ -4,11 +4,22 @@
   "description": "Personal library for Node.js",
   "main": "src/index.ts",
   "bin": {
-    "esbuild-and-run": "./esbuild-and-run"
+    "build-and-run-cmd": "./scripts/build-and-run-cmd",
+    "build-cmd": "./dist/tools/build-cmd"
   },
+  "exports": {
+    "./github": "./src/lib/github.ts"
+  },
+  "prettier": "@sergei-dyshel/prettier-config",
   "scripts": {
     "watch": "npx tsc --watch --noEmit --incremental",
-    "lint": "npx eslint",
+    "compile": "npx tsc --noEmit --incremental",
+    "install": "npm run bootstrap && npm run build-all",
+    "lint": "npx eslint --color --ext .ts src",
+    "bootstrap": "npx tsx src/tools/build-cmd/main.ts src/tools/build-cmd/main.ts",
+    "build-all": "./dist/tools/build-cmd -v src/cmd/*/main.ts src/tools/*/main.ts",
+    "clean": "rm -rf dist/*",
+    "rebuild-all": "npm run clean && npm run bootstap && npm run build-all",
     "postinstall": "[[ -f link.config.json ]] && npx link || true"
   },
   "repository": {
@@ -22,17 +33,18 @@
   },
   "homepage": "https://github.com/sergei-dyshel/qcfg-js-node",
   "dependencies": {
-    "@sergei-dyshel/typescript": "sergei-dyshel/qcfg-js-typescript#87dac880",
-    "shlex": "^2.1.2"
+    "@npmcli/package-json": "^5.1.0",
+    "@sergei-dyshel/typescript": "sergei-dyshel/qcfg-js-typescript#aa2422c15141463d6265a2479f7a02822f7efeb8",
+    "cmd-ts": "^0.13.0",
+    "esbuild": "^0.19.11",
+    "shlex": "^2.1.2",
+    "tsx": "^4.7.0"
   },
   "devDependencies": {
-    "@sergei-dyshel/eslint-config": "sergei-dyshel/eslint-config#b8d3a6f9",
+    "@sergei-dyshel/eslint-config": "sergei-dyshel/eslint-config#be58ce65ea29a2a01962e3aebc0104240b3ef8c2",
+    "@sergei-dyshel/prettier-config": "sergei-dyshel/prettier-config#1affd6973738805b73d210f9a961dc487ca38aba",
     "@types/node": "^18.18.6",
-    "esbuild": "^0.19.11",
-    "eslint": "^8.56.0",
-    "link": "^2.1.0",
-    "prettier": "^3.1.1",
-    "tsx": "^4.7.0",
-    "typescript": "^5.3.3"
+    "@types/npmcli__package-json": "^4.0.4",
+    "link": "^2.1.0"
   }
 }

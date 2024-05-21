@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+
+set -e
+
+while getopts "ib" opt; do
+    case "$opt" in
+    i)
+        inspect=1
+        ;;
+    b)
+        inspect_brk=1
+        ;;
+    \?)
+        echo "Invalid option: -$OPTARG" >&2
+        exit 1
+        ;;
+    esac
+done
+shift "$((OPTIND - 1))"
+
+cmd=$1
+shift
+
+if [[ -f ./dist/tools/build-cmd ]]; then
+    ./dist/tools/build-cmd $cmd
+else
+    npx build-cmd $cmd
+fi
+
+if [[ ! -d $cmd ]]; then
+    # strip main.ts
+    cmd=$(dirname $cmd)
+fi
+
+cmd=$(realpath -s --relative-to src $cmd)
+
+if [[ -n "$inspect" ]]; then
+    export INSPECT=1
+fi
+
+if [[ -n "$inspect_brk" ]]; then
+    export INSPECT_BRK=1
+fi
+
+exec dist/$cmd "$@"
