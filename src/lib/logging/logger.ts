@@ -1,6 +1,6 @@
 import { getCallsites } from "../callsites";
-import { LogLevel, LogRecord } from "./core";
-import { LogHandler, LogHandlerOptions, LogHandlerType } from "./handler";
+import { LogLevel, type LogRecord } from "./core";
+import { LogHandler, type LogHandlerOptions, type LogHandlerType } from "./handler";
 
 export function registerLogHandler(handler: LogHandlerType) {
   handlers.push(handler);
@@ -63,6 +63,7 @@ export class Logger {
 
   // protected
 
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
   augumentRecord(_: LogRecord) {}
 
   // private

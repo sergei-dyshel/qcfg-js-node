@@ -1,6 +1,6 @@
 import { spawnSync } from "child_process";
 import { join } from "path";
-import { Command } from "./subprocess";
+import type { Command } from "./subprocess";
 
 let globalRoot: string;
 

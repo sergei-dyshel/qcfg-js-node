@@ -1,5 +1,5 @@
-import { LogLevel, Logger } from "./logging";
-import { Command, RunOptions, mergeRunOptions, run, shlexJoin } from "./subprocess";
+import { LogLevel, type Logger } from "./logging";
+import { mergeRunOptions, run, shlexJoin, type Command, type RunOptions } from "./subprocess";
 
 const DEFAULT_PREFIX = "+ ";
 const DEFAULT_LOG_LEVEL = LogLevel.DEBUG;

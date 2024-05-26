@@ -1,5 +1,5 @@
-import { LogRecord } from "./core";
-import { Logger, LoggerOptions } from "./logger";
+import type { LogRecord } from "./core";
+import { Logger, type LoggerOptions } from "./logger";
 import { RootLogger } from "./root";
 
 export interface InstanceLoggerOptions extends ModuleLoggerOptions {}

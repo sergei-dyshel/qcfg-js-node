@@ -1,7 +1,7 @@
 import { deepMerge } from "@sergei-dyshel/typescript/deep-merge";
-import { PlainObject, WithRequired } from "@sergei-dyshel/typescript/types";
+import type { PlainObject, WithRequired } from "@sergei-dyshel/typescript/types";
 import * as cp from "node:child_process";
-import { Readable, Writable } from "node:stream";
+import type { Readable, Writable } from "node:stream";
 import * as consumers from "node:stream/consumers";
 import { shlex } from "./shlex";
 

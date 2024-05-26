@@ -1,7 +1,7 @@
 import { assert } from "@sergei-dyshel/typescript/error";
 import * as Cmd from "./cmdline-builder";
-import { Runner, RunnerOptions } from "./runner";
-import { Stdio, SubprocessRunOptions } from "./subprocess";
+import { Runner, type RunnerOptions } from "./runner";
+import { Stdio, type SubprocessRunOptions } from "./subprocess";
 
 export interface GitOptions {
   /** Use existing runner */

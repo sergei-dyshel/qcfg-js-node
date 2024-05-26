@@ -66,7 +66,6 @@ export function string(options?: CommonOptions): Handler<string> {
 export function build<S extends Schema>(schema?: S, data?: Data<S>): string[] {
   if (!data) return [];
   return Object.entries(schema ?? {}).flatMap(([name, handler]) =>
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (handler as Handler<any>)(name, data[name]),
   );
 }

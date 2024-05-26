@@ -1,7 +1,7 @@
-import { LogFormatter, LogLevel } from ".";
-import { ConsoleAppender, LogAppender } from "./appender";
-import { LogRecord } from "./core";
-import { LogFormatterType } from "./formatter";
+import { LogFormatter, type LogLevel } from ".";
+import { ConsoleAppender, type LogAppender } from "./appender";
+import type { LogRecord } from "./core";
+import type { LogFormatterType } from "./formatter";
 
 export interface LogHandlerType {
   handle: (record: LogRecord) => void;

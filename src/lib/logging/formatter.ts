@@ -1,6 +1,6 @@
 import { assignDefaults } from "@sergei-dyshel/typescript/object";
 import { inspect } from "node:util";
-import { LogLevels, LogRecord } from ".";
+import { LogLevels, type LogRecord } from ".";
 
 export interface LogFormatterType {
   format: (_: LogRecord) => string;

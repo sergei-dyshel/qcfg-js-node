@@ -1,5 +1,5 @@
 import { LoggableError } from "@sergei-dyshel/typescript/error";
-import { UriLike } from "@sergei-dyshel/typescript/uri";
+import type { UriLike } from "@sergei-dyshel/typescript/uri";
 import { basename } from "path";
 import { Path } from "./path";
 

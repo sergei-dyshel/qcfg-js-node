@@ -14,8 +14,9 @@
   "scripts": {
     "watch": "npx tsc --watch --noEmit --incremental",
     "compile": "npx tsc --noEmit --incremental",
-    "lint": "eslint --color --ext .ts src",
-    "format": "prettier **/*.{ts,js,json} --check",
+    "lint": "qcfg-eslint",
+    "format-check": "qcfg-prettier",
+    "format-write": "qcfg-prettier-write",
     "bootstrap": "npx tsx src/tools/build-cmd/main.ts src/tools/build-cmd/main.ts",
     "build": "npm run bootstrap && build-cmd -v src/cmd/*/main.ts src/tools/*/main.ts",
     "clean": "rm -rf dist/*",

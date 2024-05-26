@@ -1,4 +1,5 @@
-import NPMCliPackageJson, * as PackageJson from "@npmcli/package-json";
+import type NPMCliPackageJson from "@npmcli/package-json";
+import * as PackageJson from "@npmcli/package-json";
 import { assertNotNull } from "@sergei-dyshel/typescript/error";
 
 export { PackageJson };
