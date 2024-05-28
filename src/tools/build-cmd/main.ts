@@ -3,7 +3,7 @@ import * as cmd from "cmd-ts";
 import * as esbuild from "esbuild";
 import { chmodSync, renameSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
-import { isDirectorySync } from "../../lib/fs";
+import { isDirectorySync } from "../../lib/filesystem";
 
 const OUT_BASE = "src";
 const OUT_DIR = "dist";

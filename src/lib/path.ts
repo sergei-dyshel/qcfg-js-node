@@ -1,5 +1,9 @@
 import * as p from "node:path";
 
+export function split(path: string): string[] {
+  return path.split(Path.sep);
+}
+
 export class Path {
   path: string;
 
@@ -18,4 +22,9 @@ export class Path {
   splitAll() {
     return this.path.split(Path.sep);
   }
+}
+
+export function splitOnce(path: string): [start: string, rest: string] {
+  const parts = split(path);
+  return [parts[0], parts.slice(1).join(Path.sep)];
 }
