@@ -53,7 +53,7 @@ const appCmd = cmd.command({
   args: argSpec,
   handler: async (args) => {
     const cwd = args.cwd ?? process.cwd();
-    const entryPoints = (args.entrypoints ?? []).map((p) =>
+    const entryPoints = args.entrypoints.map((p) =>
       isDirectorySync(p) ? join(p, DEFAULT_MAIN_FILE) : p,
     );
     assert(entryPoints.length > 0, "No entry points specified!");

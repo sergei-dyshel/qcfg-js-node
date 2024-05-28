@@ -56,7 +56,7 @@ export class RunResult {
   }
 
   check() {
-    if (this.signalCode || this.exitCode != 0) throw this.checkError();
+    if (this.signalCode != null || this.exitCode != 0) throw this.checkError();
   }
 }
 
@@ -98,8 +98,12 @@ export function run(command: Command, options?: RunOptions) {
   const proc = spawn(command, options);
 
   const procPromise = new Promise<void>((resolve, reject) => {
-    proc.on("error", (err) => reject(new SpawnError(command, options, err)));
-    proc.on("exit", () => resolve());
+    proc.on("error", (err) => {
+      reject(new SpawnError(command, options, err));
+    });
+    proc.on("exit", () => {
+      resolve();
+    });
   });
   const promise: Promise<RunResult> = Promise.all([
     procPromise,
@@ -120,5 +124,5 @@ export function run(command: Command, options?: RunOptions) {
 }
 
 export function mergeRunOptions(...options: Array<RunOptions | undefined>): RunOptions {
-  return deepMerge(...options.map((o) => <PlainObject>o));
+  return deepMerge(...options.map((o) => o as PlainObject));
 }

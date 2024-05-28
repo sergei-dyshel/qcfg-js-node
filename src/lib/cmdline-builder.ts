@@ -31,7 +31,7 @@ import { kebabCase } from "@sergei-dyshel/typescript/string";
  * Specification of mapping from command line long option name to handler that describes how to
  * translate translate value to command line option value.
  */
-export type Spec = { [key: string]: AnyHandler };
+export type Spec = Record<string, AnyHandler>;
 
 /**
  * You are not supposed to use this type directly, use {@link schema} and {@link extend} function

@@ -14,9 +14,9 @@ export interface GitOptions {
   cwd?: string;
 }
 
-export interface GitStatusEntry {
-  // TODO:
-}
+// TODO:
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+export interface GitStatusEntry {}
 
 const commonSchema = Cmd.schema({
   porcelain: Cmd.boolean(),
@@ -44,8 +44,8 @@ export class Git {
   readonly runner: Runner;
 
   constructor(options?: GitOptions) {
-    this.options = options || {};
-    this.runner = options?.runner || new Runner();
+    this.options = options ?? {};
+    this.runner = options?.runner ?? new Runner();
     this.runner.mergeOptions({ cwd: options?.cwd });
   }
 

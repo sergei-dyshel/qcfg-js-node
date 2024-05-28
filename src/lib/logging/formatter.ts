@@ -63,14 +63,14 @@ export class LogFormatter implements LogFormatterType {
     if (this.options.showDate) parts.push(this.formatDate(record.date));
     if (this.options.showLocation) {
       const { callSite } = record;
-      const location = `${callSite.getFileName()}:${callSite.getLineNumber()}:${callSite.getColumnNumber()}`;
+      const location = `${callSite.getFileName()!}:${callSite.getLineNumber()!}:${callSite.getColumnNumber()!}`;
       parts.push(LogLevels.toString(record.level), location);
     }
-    if (this.options.showFunction) parts.push(record.callSite.getFunctionName() + "()");
+    if (this.options.showFunction) parts.push(record.callSite.getFunctionName()! + "()");
     if (this.options.showModule && record.module) parts.push(`[${record.module}]`);
     if (this.options.showInstance && record.instance) parts.push(`{${record.instance}}`);
     parts.push(record.message);
-    if (this.options?.serializeArgs) parts.push(record.args.map(this.serialize).join(" "));
+    if (this.options.serializeArgs) parts.push(record.args.map(this.serialize).join(" "));
     return parts.join(" ");
   }
 

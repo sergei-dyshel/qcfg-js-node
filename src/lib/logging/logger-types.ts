@@ -2,7 +2,7 @@ import type { LogRecord } from "./core";
 import { Logger, type LoggerOptions } from "./logger";
 import { RootLogger } from "./root";
 
-export interface InstanceLoggerOptions extends ModuleLoggerOptions {}
+export type InstanceLoggerOptions = ModuleLoggerOptions;
 export interface ModuleLoggerOptions extends LoggerOptions {
   parent?: ModuleLogger;
 }
@@ -40,8 +40,4 @@ export class ModuleLogger extends Logger {
   }
 }
 
-export class MainLogger extends ModuleLogger {
-  constructor(filename: string) {
-    super(filename);
-  }
-}
+export class MainLogger extends ModuleLogger {}
