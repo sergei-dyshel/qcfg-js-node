@@ -110,9 +110,7 @@ export function run(command: Command, options?: RunOptions) {
     proc.stdout ? consumers.text(proc.stdout) : undefined,
     proc.stderr ? consumers.text(proc.stderr) : undefined,
   ])
-    .then(([_, stdout, stderr]) => {
-      return new RunResult(command, options, proc, stdout, stderr);
-    })
+    .then(([_, stdout, stderr]) => new RunResult(command, options, proc, stdout, stderr))
     .then((result) => {
       if (options?.check) result.check();
       return result;

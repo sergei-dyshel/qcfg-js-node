@@ -54,14 +54,13 @@ export function buildFileTree<Folder, File, Parent, T>(
   ) => Folder,
   makeFile: (name: string, obj: T, parent: Folder | Parent) => File,
 ): (Folder | File)[] {
-  const impl = (trees: Tree<T>[], parent: Folder | Parent): (Folder | File)[] => {
-    return trees.map((tree) => {
+  const impl = (trees: Tree<T>[], parent: Folder | Parent): (Folder | File)[] =>
+    trees.map((tree) => {
       if (tree.children) {
         return makeFolder(tree.name, tree.path, parent, impl(tree.children, parent));
       }
       return makeFile(tree.name, tree.obj!, parent);
     });
-  };
   const trees = buildTrees(files.map((file) => [getPath(file), file]));
   return impl(trees, parent);
 }

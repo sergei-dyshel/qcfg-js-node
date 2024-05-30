@@ -1,4 +1,4 @@
-import { getCallsites } from "../callsites";
+import { getCallsite } from "../callsites";
 import { LogLevel, type LogRecord } from "./core";
 import { LogHandler, type LogHandlerOptions, type LogHandlerType } from "./handler";
 
@@ -6,27 +6,37 @@ export function registerLogHandler(handler: LogHandlerType) {
   handlers.push(handler);
 }
 
+export function getLogHandlers(): readonly LogHandlerType[] {
+  return handlers;
+}
+
 export interface LoggingOptions {
-  handlerOptions?: LogHandlerOptions;
+  handler?: LogHandlerOptions;
 }
 
 export function configureLogging(options?: LoggingOptions) {
-  registerLogHandler(new LogHandler(options?.handlerOptions));
+  handlers.splice(0);
+  registerLogHandler(new LogHandler(options?.handler));
 }
 
 export interface LoggerOptions {
   parent?: Logger;
+  level?: LogLevel;
+  now?: () => Date;
 }
 
 export class Logger {
   readonly parent?: Logger;
+  level?: LogLevel;
 
-  constructor(options?: LoggerOptions) {
+  constructor(private options?: LoggerOptions) {
+    this.level = options?.level;
     this.parent = options?.parent;
   }
 
   log(level: LogLevel, message: string, ...args: unknown[]) {
-    this.logImpl(level, 3, message, args);
+    /** Skip frames for {@link log}, {@link logImpl} */
+    this.logImpl(level, 2, message, args);
   }
 
   logCallDepth(level: LogLevel, callDepth: number, message: string, ...args: unknown[]) {
@@ -69,15 +79,18 @@ export class Logger {
   // private
 
   private logWithLevel(level: LogLevel, message: string, args: unknown[]) {
-    this.logImpl(level, 4, message, args);
+    // this function is called from debug, info etc.
+    // so we need to skip frames for log function, logWithLevel, logImpl,
+    this.logImpl(level, 3, message, args);
   }
 
   private logImpl(logLevel: LogLevel, callDepth: number, message: string, args: unknown[]) {
+    if (this.level && logLevel < this.level) return;
     const record: LogRecord = {
       message,
       level: logLevel,
-      date: new Date(),
-      callSite: getCallsites()[callDepth],
+      date: this.options?.now?.() ?? new Date(),
+      callSite: getCallsite(callDepth),
       args,
     };
     this.augumentRecord(record);

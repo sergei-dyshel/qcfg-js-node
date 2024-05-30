@@ -1,87 +1,154 @@
-import { assignDefaults } from "@sergei-dyshel/typescript/object";
+import { formatDate } from "@sergei-dyshel/typescript/datetime";
+import { callIfDefined } from "@sergei-dyshel/typescript/utils";
+import { basename, join } from "node:path";
 import { inspect } from "node:util";
-import { LogLevels, type LogRecord } from ".";
+import { LogLevels, type LogLevelNameLowerCase, type LogRecord } from ".";
+import type { ColorizeFunction } from "../ansi-color";
+import { split } from "../path";
 
 export interface LogFormatterType {
-  format: (_: LogRecord) => string;
+  format: (_: LogRecord) => readonly [string, unknown[]];
 }
 
-export enum LogFormat {
-  MSG = "msg",
-  SHORT = "short",
-  FULL = "full",
+export type LogLineComponent = (record: LogRecord, format?: LogFormatOptions) => string;
+
+/** Helpers for customizing log format */
+export namespace LogFormat {
+  //
+  // log components
+  //
+
+  export const date: LogLineComponent = (record, format) => {
+    // using Unicode tokens https://www.unicode.org/reports/tr35/tr35-dates.html#Date_Field_Symbol_Table
+    let formatStr = "HH:mm:ss";
+    if (!format?.date?.omitDate) formatStr = "yyyy-MM-dd " + formatStr;
+    if (format?.date?.showMilliseconds) formatStr += ".SSS";
+
+    return formatDate(record.date, formatStr);
+  };
+  export const level: LogLineComponent = (record, format) => {
+    const str = LogLevels.toString(record.level);
+    const options = format?.level?.[LogLevels.toLowerCase(record.level)];
+    return callIfDefined(options?.colorizeLevel, str as string);
+  };
+  export const location: LogLineComponent = (record, format) => {
+    const options = format?.location;
+    const fullPath = record.callSite.file;
+    const baseName = basename(fullPath);
+    let filename = options?.baseName ? baseName : getPathRelativeToSrc(fullPath) ?? baseName;
+    if (options?.fileColor) filename = options.fileColor(filename);
+    let base = `${filename}:${record.callSite.line}`;
+    if (options?.showColumn) base += `:${record.callSite.column}`;
+    return base;
+  };
+  export const func: LogLineComponent = (record) => record.callSite.function + "()";
+  export const message: LogLineComponent = (record) => record.message;
+  export const module: LogLineComponent = (record) =>
+    record.module && record.module != "" ? `[${record.module}]` : "";
+  export const instance: LogLineComponent = (record) =>
+    record.instance ? `{${record.instance}}` : "";
+
+  //
+  // Predefined templates
+  //
+
+  /** Only message, default template */
+  export const MSG_ONLY: LogFormatTemplate = [message];
+
+  /** Omit location data */
+  export const SHORT = [level, module, instance, message];
+
+  /** Full log line, including all components */
+  export const FULL = [date, level, location, func, module, instance, message];
 }
 
-interface BaseLogFormatterOptions {
-  showDate?: boolean;
-  showLevel?: boolean;
-  showLocation?: boolean;
-  showFunction?: boolean;
-  showModule?: boolean;
-  showInstance?: boolean;
+export interface LogFormatOptions {
+  date?: {
+    omitDate?: boolean;
+    showMilliseconds?: boolean;
+  };
+  location?: {
+    /** Show column number beside line number */
+    showColumn?: boolean;
+
+    /**
+     * Only show base file name.
+     *
+     * Otherwise will look for last `src` path component and show path relative to it (with fallback
+     * to base name if not found)
+     */
+    baseName?: boolean;
+
+    /** Color to apply to source file path */
+    fileColor?: ColorizeFunction;
+  };
+
+  /** Override options per log level */
+  level?: Partial<
+    Record<
+      LogLevelNameLowerCase,
+      {
+        colorizeLevel?: ColorizeFunction;
+        colorizeLine?: ColorizeFunction;
+      }
+    >
+  >;
 }
 
-function logFormatOptions(format: LogFormat): BaseLogFormatterOptions {
-  const options: BaseLogFormatterOptions = {};
-  switch (format) {
-    case LogFormat.FULL:
-      options.showDate = true;
-      options.showFunction = true;
-    /* fallthrough */
-    case LogFormat.SHORT:
-      options.showLevel = true;
-      options.showModule = true;
-      options.showInstance = true;
-    /* fallthrough */
-    case LogFormat.MSG:
-      break;
-  }
-  return options;
-}
+type LogFormatTemplate = (LogLineComponent | string)[];
 
-export interface LogFormatterOptions extends BaseLogFormatterOptions {
-  format?: LogFormat;
+export interface LogFormatterOptions {
+  /** Format of specific log line components */
+  format?: LogFormatOptions;
+
+  /**
+   * Log line template that specifies which components to use.
+   *
+   * One should normally only use string literals and pre-made components from {@link LogFormat}.
+   */
+  template?: LogFormatTemplate;
+
+  /**
+   * Serialize arguments to end of log line, should be used for text-only appenders.
+   *
+   * Use {@link serialize} to custom conversion to string.
+   */
   serializeArgs?: boolean;
+
+  /**
+   * Custom function to convert arguments to string.
+   *
+   * By default {@link inspect} is used.
+   */
   serialize?: (arg: unknown) => string;
 }
 
 export class LogFormatter implements LogFormatterType {
-  private options: LogFormatterOptions;
   private serialize: (arg: unknown) => string;
 
-  constructor(options?: LogFormatterOptions) {
-    this.options = assignDefaults(
-      options ?? {},
-      logFormatOptions(options?.format ?? LogFormat.MSG),
-    );
-
+  constructor(public options?: LogFormatterOptions) {
     this.serialize = options?.serialize ?? inspect;
   }
 
   format(record: LogRecord) {
     const parts: string[] = [];
-    if (this.options.showDate) parts.push(this.formatDate(record.date));
-    if (this.options.showLocation) {
-      const { callSite } = record;
-      const location = `${callSite.getFileName()!}:${callSite.getLineNumber()!}:${callSite.getColumnNumber()!}`;
-      parts.push(LogLevels.toString(record.level), location);
+    for (const component of this.options?.template ?? LogFormat.MSG_ONLY) {
+      const part =
+        typeof component === "string" ? component : component(record, this.options?.format);
+      if (part !== "") parts.push(part);
     }
-    if (this.options.showFunction) parts.push(record.callSite.getFunctionName()! + "()");
-    if (this.options.showModule && record.module) parts.push(`[${record.module}]`);
-    if (this.options.showInstance && record.instance) parts.push(`{${record.instance}}`);
-    parts.push(record.message);
-    if (this.options.serializeArgs) parts.push(record.args.map(this.serialize).join(" "));
-    return parts.join(" ");
+    if (this.options?.serializeArgs) parts.push(record.args.map(this.serialize).join(" "));
+    const logLine = callIfDefined(
+      this.options?.format?.level?.[LogLevels.toLowerCase(record.level)]?.colorizeLine,
+      parts.join(" "),
+    );
+    return [logLine, this.options?.serializeArgs ? [] : record.args] as const;
   }
+}
 
-  formatDate(date: Date): string {
-    const dateStr = date.toLocaleTimeString("en-US", {
-      hour12: false,
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-    const ms = String(date.getMilliseconds()).padStart(3, "0");
-    return dateStr + "." + ms;
-  }
+function getPathRelativeToSrc(fullPath: string) {
+  const parts = split(fullPath);
+  const srcIndex = parts.lastIndexOf("src");
+  if (srcIndex == -1) return undefined;
+  return join(...parts.slice(srcIndex + 1));
 }

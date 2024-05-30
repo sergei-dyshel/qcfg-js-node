@@ -1,7 +1,7 @@
 import { LogFormatter, type LogLevel } from ".";
 import { ConsoleAppender, type LogAppender } from "./appender";
 import type { LogRecord } from "./core";
-import type { LogFormatterType } from "./formatter";
+import type { LogFormatterOptions, LogFormatterType } from "./formatter";
 
 export interface LogHandlerType {
   handle: (record: LogRecord) => void;
@@ -15,9 +15,11 @@ export interface BaseLogHandlerOptions {
 
 /** Minimal handler interface, with level filter and user-customizable filters */
 export abstract class BaseLogHandler implements LogHandlerType {
+  level?: LogLevel;
+
   protected constructor(options?: BaseLogHandlerOptions) {
-    const level = options?.level;
-    if (level) this.filters.push((record) => record.level >= level);
+    this.level = options?.level;
+    this.filters.push((record) => this.level == undefined || record.level >= this.level);
   }
 
   abstract handle(record: LogRecord): void;
@@ -32,24 +34,23 @@ export abstract class BaseLogHandler implements LogHandlerType {
 
 export interface LogHandlerOptions extends BaseLogHandlerOptions {
   dropArgs?: boolean;
-  formatter?: LogFormatterType;
+  formatter?: LogFormatterOptions;
   appenders?: LogAppender[];
 }
 
 export class LogHandler extends BaseLogHandler {
-  private formatter: LogFormatterType;
-  private appenders: LogAppender[];
+  readonly formatter: LogFormatterType;
+  readonly appenders: LogAppender[];
 
-  constructor(private options?: LogHandlerOptions) {
+  constructor(options?: LogHandlerOptions) {
     super(options);
-    this.formatter = options?.formatter ?? new LogFormatter();
+    this.formatter = new LogFormatter(options?.formatter);
     this.appenders = options?.appenders ?? [new ConsoleAppender()];
   }
 
   override handle(record: LogRecord) {
     if (!this.shouldHandle(record)) return;
-    const logLine = this.formatter.format(record);
-    for (const appender of this.appenders)
-      appender.append(logLine, this.options?.dropArgs ? undefined : record.args);
+    const [logLine, args] = this.formatter.format(record);
+    for (const appender of this.appenders) appender.append(logLine, args);
   }
 }

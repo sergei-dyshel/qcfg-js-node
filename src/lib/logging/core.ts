@@ -1,4 +1,5 @@
 import { enumUtil } from "@sergei-dyshel/typescript/enum";
+import type { CallSite } from "../callsites";
 
 export enum LogLevel {
   TRACE = 1,
@@ -10,13 +11,18 @@ export enum LogLevel {
   FATAL = 7,
 }
 
-type LogLevelName = keyof typeof LogLevel;
+export type LogLevelName = keyof typeof LogLevel;
+export type LogLevelNameLowerCase = Lowercase<LogLevelName>;
 
 export namespace LogLevels {
   export const util = enumUtil(LogLevel);
 
   export function toString(level: LogLevel) {
     return LogLevel[level] as LogLevelName;
+  }
+
+  export function toLowerCase(level: LogLevel) {
+    return LogLevel[level].toLowerCase() as LogLevelNameLowerCase;
   }
 
   export function fromString(s: string): LogLevel | undefined {
@@ -36,7 +42,7 @@ export interface LogRecord {
   /** Loglevel */
   level: LogLevel;
   /** Function name */
-  callSite: NodeJS.CallSite;
+  callSite: CallSite;
   /** Library module */
   module?: string;
   /** Object instance ID/descriptor */

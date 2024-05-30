@@ -37,10 +37,12 @@
   "dependencies": {
     "@npmcli/package-json": "^5.1.0",
     "@sergei-dyshel/typescript": "*",
+    "ansicolor": "^2.0.3",
     "cmd-ts": "^0.13.0",
     "esbuild": "^0.21.2",
     "fs-extra": "^11.1.1",
     "shlex": "^2.1.2",
+    "source-map-support": "^0.5.21",
     "tsx": "^4.7.0"
   },
   "devDependencies": {
@@ -48,6 +50,7 @@
     "@sergei-dyshel/prettier-config": "*",
     "@types/fs-extra": "^11.0.1",
     "@types/node": "^18.18.6",
-    "@types/npmcli__package-json": "^4.0.4"
+    "@types/npmcli__package-json": "^4.0.4",
+    "@types/source-map-support": "^0.5.10"
   }
 }

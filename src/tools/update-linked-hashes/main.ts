@@ -1,3 +1,5 @@
+// REFACTOR: remove this
+
 import { assert, assertNotNull } from "@sergei-dyshel/typescript/error";
 import { P, match } from "@sergei-dyshel/typescript/pattern";
 import { removePrefix } from "@sergei-dyshel/typescript/string";
@@ -15,7 +17,7 @@ import {
   packageJsonSetDepencency,
 } from "../../lib/package-json";
 
-const logger = new MainLogger(__filename);
+const logger = new MainLogger({ name: __filename });
 
 const argSpec = {
   verbose: cmd.flag({
@@ -33,7 +35,7 @@ const appCmd = cmd.command({
   description: "Update linked hashes in package.json",
   args: argSpec,
   handler: async (args) => {
-    configureLogging({ handlerOptions: { level: args.verbose ? LogLevel.DEBUG : LogLevel.INFO } });
+    configureLogging({ handler: { level: args.verbose ? LogLevel.DEBUG : LogLevel.INFO } });
     const thisPkgJson = await PackageJson.load(".");
     const linkJson = JSON.parse(readFileSync("link.config.json", "utf8")) as {
       packages: string[];

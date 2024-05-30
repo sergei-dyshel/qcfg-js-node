@@ -1,9 +1,15 @@
+import { getCallsite } from "../callsites";
+import { basename } from "../path";
 import type { LogRecord } from "./core";
 import { Logger, type LoggerOptions } from "./logger";
 import { RootLogger } from "./root";
 
 export type InstanceLoggerOptions = ModuleLoggerOptions;
 export interface ModuleLoggerOptions extends LoggerOptions {
+  /** Module name, by default will use filename from where constructor is called */
+  name?: string;
+
+  /** Logger of parent module, for creating hierarchy. */
   parent?: ModuleLogger;
 }
 
@@ -26,13 +32,15 @@ export class InstanceLogger extends Logger {
 }
 export class ModuleLogger extends Logger {
   readonly path: string;
+  readonly name: string;
+
   declare readonly parent: ModuleLogger | RootLogger;
-  constructor(
-    readonly name: string,
-    options?: ModuleLoggerOptions,
-  ) {
-    super({ parent: options?.parent ?? RootLogger.get() });
-    this.path = this.parent instanceof ModuleLogger ? this.parent.path + "." + name : name;
+
+  constructor(options?: ModuleLoggerOptions) {
+    super({ ...options, parent: options?.parent ?? RootLogger.get() });
+    this.name = options?.name ?? basename(getCallsite(1).file, true /* stripExt */);
+    this.path =
+      this.parent instanceof ModuleLogger ? this.parent.path + "." + this.name : this.name;
   }
 
   override augumentRecord(record: LogRecord) {

@@ -28,3 +28,13 @@ export function splitOnce(path: string): [start: string, rest: string] {
   const parts = split(path);
   return [parts[0], parts.slice(1).join(Path.sep)];
 }
+
+export function stripExt(path: string) {
+  const parsed = p.parse(path);
+  return p.join(parsed.dir, parsed.name);
+}
+
+export function basename(path: string, stripExt = false) {
+  const parsed = p.parse(path);
+  return stripExt ? parsed.name : parsed.base;
+}

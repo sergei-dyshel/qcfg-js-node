@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-floating-promises */
-import { Assert, Test } from "@sergei-dyshel/typescript/testing";
+import { Assert } from "@sergei-dyshel/typescript/error";
+import { Test } from "@sergei-dyshel/typescript/testing";
 import * as Cmd from "../cmdline-builder";
 
 const schema = Cmd.schema({
