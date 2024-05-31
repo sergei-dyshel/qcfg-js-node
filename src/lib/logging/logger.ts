@@ -11,11 +11,7 @@ export function getLogHandlers(): readonly LogHandlerType[] {
   return handlers;
 }
 
-export interface LoggingOptions {
-  handler?: LogHandlerOptions;
-}
-
-export function configureLogging(options?: LoggingOptions) {
+export function configureLogging(options?: { handler?: LogHandlerOptions }) {
   handlers.splice(0);
   registerLogHandler(new LogHandler(options?.handler));
 }

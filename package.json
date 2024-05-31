@@ -8,6 +8,8 @@
     "build-cmd": "./dist/tools/build-cmd"
   },
   "exports": {
+    "./ansi-color": "./src/lib/ansi-color.ts",
+    "./logging": "./src/lib/logging/index.ts",
     "./github": "./src/lib/github.ts",
     "./path": "./src/lib/path.ts",
     "./path-tree": "./src/lib/path-tree.ts"
