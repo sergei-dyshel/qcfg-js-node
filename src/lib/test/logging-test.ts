@@ -21,7 +21,7 @@ function dateInjection() {
 const DATE = "2020-01-01";
 const TIME = "13:30:20";
 
-const FILE = "lib/test/logging-test.ts";
+const FILE = "logging-test.ts";
 const MODULE = "qcfg-js-node.logging-test";
 
 type LogLine = [msg?: string, ..._: unknown[]];
@@ -114,6 +114,13 @@ function main() {
     logger.debug("This should not be logged because of handler level");
     logger.level = undefined;
   });
+
+  const error = new Error("Some error");
+  const cause = new Error("Cause of the error");
+  error.cause = cause;
+  (() => {
+    logger.logError(error);
+  })();
 }
 
 main();

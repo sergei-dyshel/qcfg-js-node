@@ -1,4 +1,5 @@
-import { getCallsite } from "../callsites";
+import { formatError } from "@sergei-dyshel/typescript/error";
+import { formatErrorStackFrame, getCallsite, parseErrorStack } from "../callsites";
 import { LogLevel, type LogRecord } from "./core";
 import { LogHandler, type LogHandlerOptions, type LogHandlerType } from "./handler";
 
@@ -36,7 +37,7 @@ export class Logger {
 
   log(level: LogLevel, message: string, ...args: unknown[]) {
     /** Skip frames for {@link log}, {@link logImpl} */
-    this.logImpl(level, 2, message, args);
+    this.logImpl(level, 1, message, args);
   }
 
   logCallDepth(level: LogLevel, callDepth: number, message: string, ...args: unknown[]) {
@@ -71,17 +72,43 @@ export class Logger {
     this.logWithLevel(LogLevel.FATAL, message, args);
   }
 
+  logError(
+    error: unknown,
+    options?: {
+      /** Prefix error message with this string */
+      prefix?: string;
+
+      /** By default use ERROR */
+      level?: LogLevel;
+    },
+  ) {
+    let msg = (options?.prefix ?? "") + formatError(error);
+    if (error instanceof Error && error.stack) {
+      const filteredFrames = parseErrorStack(error.stack)
+        .filter(
+          (frame) =>
+            !frame.file.startsWith("node:") &&
+            !frame.file.includes("/qcfg-js-typescript/src/error.ts"),
+        )
+        .map((frame) => formatErrorStackFrame(frame));
+      msg += "\n" + filteredFrames.join("\n");
+    }
+    this.logImpl(options?.level ?? LogLevel.ERROR, 1, msg, []);
+    if (error instanceof Error && error.cause)
+      this.logError(error.cause, { ...options, prefix: "Caused by: " });
+  }
+
   // protected
 
   // eslint-disable-next-line @typescript-eslint/no-empty-function
-  augumentRecord(_: LogRecord) {}
+  protected augumentRecord(_: LogRecord) {}
 
   // private
 
   private logWithLevel(level: LogLevel, message: string, args: unknown[]) {
     // this function is called from debug, info etc.
     // so we need to skip frames for log function, logWithLevel, logImpl,
-    this.logImpl(level, 3, message, args);
+    this.logImpl(level, 2, message, args);
   }
 
   private logImpl(logLevel: LogLevel, callDepth: number, message: string, args: unknown[]) {
@@ -90,7 +117,7 @@ export class Logger {
       message,
       level: logLevel,
       date: this.options?.now?.() ?? new Date(),
-      callSite: getCallsite(callDepth),
+      callSite: getCallsite(1 + callDepth),
       args,
     };
     this.augumentRecord(record);

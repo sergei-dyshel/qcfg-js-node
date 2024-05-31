@@ -1,4 +1,7 @@
+import assert from "assert";
+import { join } from "node:path";
 import { mapSourcePosition, type Position } from "source-map-support";
+import { split } from "./path";
 
 /**
  * See https://v8.dev/docs/stack-trace-api
@@ -108,6 +111,55 @@ export class CallSite {
  *
  * @param framesToSkip Number of top stack frames to skip
  */
-export function getCallsite(framesToSkip = 0) {
+export function getCallsite(framesToSkip = 0): CallSite {
   return new CallSite(getCallsites()[framesToSkip + 1]);
+}
+
+export interface ParsedErrorStackFrame {
+  function?: string;
+  file: string;
+  line: number;
+  column: number;
+}
+
+/**
+ * Formats back to string error stack frame parsed with {@link parseErrorStack}, with some
+ * readability enhancements
+ */
+export function formatErrorStackFrame(frame: ParsedErrorStackFrame): string {
+  return `    at ${frame.function} (${shortenSourcePath(frame.file)}:${frame.line}:${frame.column})`;
+}
+
+function parseStackFrame(line: string): ParsedErrorStackFrame {
+  let match = line.match(/^\s+at\s+(.*?)\s+\((.*?):(\d+):(\d+)\)$/);
+  if (match)
+    return {
+      function: match[1],
+      file: match[2],
+      line: parseInt(match[3]),
+      column: parseInt(match[4]),
+    };
+
+  match = line.match(/^\s+at\s(.*?):(\d+):(\d+)$/);
+  assert(match);
+  return {
+    file: match[1],
+    line: parseInt(match[2]),
+    column: parseInt(match[3]),
+  };
+}
+
+export function parseErrorStack(stack: string): ParsedErrorStackFrame[] {
+  return stack.split("\n").slice(1).map(parseStackFrame);
+}
+
+/**
+ * Source file path defined in {@link CallSite} and ${@link ParsedErrorStackFrame} is absolute and is
+ * harder to read in logs and stack traces. Here we try to heuristicaly shorten it to relative path
+ */
+export function shortenSourcePath(path: string): string {
+  const parts = split(path);
+  const srcIndex = parts.lastIndexOf("src");
+  if (srcIndex == -1) return path;
+  return join(...parts.slice(srcIndex - 1));
 }

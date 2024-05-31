@@ -1,10 +1,10 @@
 import { formatDate } from "@sergei-dyshel/typescript/datetime";
 import { callIfDefined } from "@sergei-dyshel/typescript/utils";
-import { basename, join } from "node:path";
+import { basename } from "node:path";
 import { inspect } from "node:util";
 import { LogLevels, type LogLevelNameLowerCase, type LogRecord } from ".";
 import type { ColorizeFunction } from "../ansi-color";
-import { split } from "../path";
+import { shortenSourcePath } from "../callsites";
 
 export interface LogFormatterType {
   format: (_: LogRecord) => readonly [string, unknown[]];
@@ -35,7 +35,7 @@ export namespace LogFormat {
     const options = format?.location;
     const fullPath = record.callSite.file;
     const baseName = basename(fullPath);
-    let filename = options?.baseName ? baseName : getPathRelativeToSrc(fullPath) ?? baseName;
+    let filename = options?.relativePath ? shortenSourcePath(fullPath) : baseName;
     if (options?.fileColor) filename = options.fileColor(filename);
     let base = `${filename}:${record.callSite.line}`;
     if (options?.showColumn) base += `:${record.callSite.column}`;
@@ -72,12 +72,10 @@ export interface LogFormatOptions {
     showColumn?: boolean;
 
     /**
-     * Only show base file name.
-     *
-     * Otherwise will look for last `src` path component and show path relative to it (with fallback
-     * to base name if not found)
+     * If set, log line will show path relative to library root. Otherwise only base file name will
+     * be shown.
      */
-    baseName?: boolean;
+    relativePath?: boolean;
 
     /** Color to apply to source file path */
     fileColor?: ColorizeFunction;
@@ -144,11 +142,4 @@ export class LogFormatter implements LogFormatterType {
     );
     return [logLine, this.options?.serializeArgs ? [] : record.args] as const;
   }
-}
-
-function getPathRelativeToSrc(fullPath: string) {
-  const parts = split(fullPath);
-  const srcIndex = parts.lastIndexOf("src");
-  if (srcIndex == -1) return undefined;
-  return join(...parts.slice(srcIndex + 1));
 }
