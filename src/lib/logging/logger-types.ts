@@ -4,7 +4,10 @@ import type { LogRecord } from "./core";
 import { Logger, type LoggerOptions } from "./logger";
 import { RootLogger } from "./root";
 
-export type InstanceLoggerOptions = ModuleLoggerOptions;
+export interface InstanceLoggerOptions extends LoggerOptions {
+  parent?: ModuleLogger | RootLogger;
+}
+
 export interface ModuleLoggerOptions extends LoggerOptions {
   /** Module name, by default will use filename from where constructor is called */
   name?: string;
@@ -17,7 +20,7 @@ export class InstanceLogger extends Logger {
   declare readonly parent: ModuleLogger;
 
   constructor(
-    public readonly instance: string,
+    public readonly instance?: string,
     options?: InstanceLoggerOptions,
   ) {
     super(options);

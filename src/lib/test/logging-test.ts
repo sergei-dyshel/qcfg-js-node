@@ -4,6 +4,7 @@ import { CallSite, getCallsite } from "../callsites";
 import { libraryLogger } from "../internal";
 import {
   ConsoleAppender,
+  InstanceLogger,
   LogFormat,
   LogFormatter,
   LogLevel,
@@ -112,8 +113,18 @@ function main() {
   appender.verifyNotAppended(() => {
     handler.level = LogLevel.INFO;
     logger.debug("This should not be logged because of handler level");
-    logger.level = undefined;
+    handler.level = undefined;
   });
+
+  msg = "Example of instance logger";
+  const instance = "instance";
+  const instanceLogger = new InstanceLogger(instance, { parent: logger, now: dateInjection });
+  formatter.options = {
+    template: [LogFormat.instance, LogFormat.message],
+  };
+  appender.verifyAppended(() => {
+    instanceLogger.debug(msg);
+  }, [`{${instance}} ${msg}`]);
 
   const error = new Error("Some error");
   const cause = new Error("Cause of the error");
