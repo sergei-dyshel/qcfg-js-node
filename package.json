@@ -9,6 +9,7 @@
   },
   "exports": {
     "./lock": "./src/lib/lock/index.ts",
+    "./cache": "./src/lib/cache.ts",
     "./filesystem": "./src/lib/filesystem.ts",
     "./ansi-color": "./src/lib/ansi-color.ts",
     "./logging": "./src/lib/logging/index.ts",
