@@ -27,6 +27,7 @@
     "format-write": "qcfg-prettier-write",
     "bootstrap": "npx tsx src/tools/build-cmd/main.ts src/tools/build-cmd/main.ts",
     "build": "npm run bootstrap && build-cmd -v src/cmd/*/main.ts src/tools/*/main.ts",
+    "test": "qcfg-test-all",
     "clean": "rm -rf dist/*",
     "rebuild": "npm run clean && npm run bootstap && npm run build"
   },
