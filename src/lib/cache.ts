@@ -1,9 +1,9 @@
-import { emptyDir } from "@sergei-dyshel/node/filesystem";
 import { jsonStableStringify } from "@sergei-dyshel/typescript/json";
 import { createHash } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { emptyDir } from "./filesystem";
 import { GlobalLock } from "./lock";
 import { InstanceLogger, ModuleLogger } from "./logging";
 

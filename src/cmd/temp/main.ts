@@ -1,5 +1,5 @@
 import { exec } from "../../lib/native-exec";
-import { RunError, Stdio, run } from "../../lib/subprocess";
+import { RunError, run } from "../../lib/subprocess";
 
 function logException(_: string, err: unknown) {
   if (err instanceof Error) {
@@ -33,8 +33,8 @@ async function main() {
   try {
     try {
       await run(["ls", "bla"], {
-        stdout: Stdio.PIPE,
-        stderr: Stdio.PIPE,
+        stdout: "pipe",
+        stderr: "pipe",
         check: true,
       });
     } catch (err) {

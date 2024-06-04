@@ -1,4 +1,4 @@
-import { Assert, asInstanceOf, assert } from "@sergei-dyshel/typescript/error";
+import { asInstanceOf, assert, assertDeepEqual } from "@sergei-dyshel/typescript/error";
 import { red, underline } from "../ansi-color";
 import { CallSite, getCallsite } from "../callsites";
 import { libraryLogger } from "../internal";
@@ -39,7 +39,7 @@ class MyConsoleAppender extends ConsoleAppender {
     this.lastAppended = undefined;
     f();
     assert(this.lastAppended, "Nothing was appended to log");
-    Assert.deepEqual(this.lastAppended, line);
+    assertDeepEqual(this.lastAppended, line);
   }
 
   verifyNotAppended(f: () => unknown) {
