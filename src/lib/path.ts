@@ -24,6 +24,13 @@ export class Path {
   }
 }
 
+export function pathJoin(initialPath?: string, ...paths: string[]) {
+  if (initialPath) {
+    return p.join(initialPath, ...paths);
+  }
+  return p.join(...paths);
+}
+
 export function splitOnce(path: string): [start: string, rest: string] {
   const parts = split(path);
   return [parts[0], parts.slice(1).join(Path.sep)];

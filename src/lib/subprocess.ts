@@ -1,6 +1,5 @@
-import { deepMerge } from "@sergei-dyshel/typescript/deep-merge";
 import { fail } from "@sergei-dyshel/typescript/error";
-import type { PlainObject, WithRequired } from "@sergei-dyshel/typescript/types";
+import type { WithRequired } from "@sergei-dyshel/typescript/types";
 import {
   spawn as childProcessSpawn,
   type ChildProcess,
@@ -171,8 +170,4 @@ export function run(command: Command, options?: RunOptions) {
   const promiseWithChild = promise as PromiseWithChild<RunResult>;
   promiseWithChild.child = proc;
   return promiseWithChild;
-}
-
-export function mergeRunOptions(...options: Array<RunOptions | undefined>): RunOptions {
-  return deepMerge(...options.map((o) => o as PlainObject));
 }
