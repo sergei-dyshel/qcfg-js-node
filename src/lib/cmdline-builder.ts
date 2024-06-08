@@ -55,12 +55,12 @@ export function boolean(options?: BooleanOptions): Handler<boolean> {
     const prefix = options?.invert ? "no-" : "";
     const val = value ?? options?.default ?? false;
     const emitOnVal = options?.invert ?? false;
-    return val != emitOnVal ? [translateName(name, options, prefix)] : [];
+    return val != emitOnVal ? [emitName(name, options, prefix)] : [];
   };
 }
 
-export function string(options?: CommonOptions): Handler<string> {
-  return (name, value) => (value ? [translateName(name, options), value] : []);
+export function string(options?: CommonArgOptions): Handler<string> {
+  return (name, value) => (value ? emitArg(name, value, options) : []);
 }
 
 export function build<S extends Schema>(schema?: S, data?: Data<S>): string[] {
@@ -109,6 +109,16 @@ interface CommonOptions {
   custom?: string;
 }
 
-function translateName(name: string, options?: CommonOptions, prefix = ""): string {
+interface CommonArgOptions extends CommonOptions {
+  /** Emit argument as `--name=value` instead of `--name value` */
+  equals?: boolean;
+}
+
+function emitName(name: string, options?: CommonOptions, prefix = ""): string {
   return options?.custom ?? "--" + prefix + kebabCase(name);
+}
+
+function emitArg(name: string, value: string, options?: CommonArgOptions): string[] {
+  const emittedName = emitName(name, options);
+  return options?.equals ? [`${emittedName}=${value}`] : [emittedName, value];
 }

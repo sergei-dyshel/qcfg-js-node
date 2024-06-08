@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-floating-promises */
 import { assertDeepEqual } from "@sergei-dyshel/typescript/error";
 import { test } from "@sergei-dyshel/typescript/testing";
 import * as Cmd from "../cmdline-builder";
@@ -56,4 +55,16 @@ test("extend with undefined schema", () => {
   assertDeepEqual(Cmd.build(Cmd.extend(extendSchema, undefined), { boolFlag: true }), [
     "--bool-flag",
   ]);
+});
+
+test("string argument with equals sign", () => {
+  assertDeepEqual(
+    Cmd.build(
+      Cmd.schema({
+        stringFlag: Cmd.string({ equals: true }),
+      }),
+      { stringFlag: "value" },
+    ),
+    ["--string-flag=value"],
+  );
 });

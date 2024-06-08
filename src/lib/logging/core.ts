@@ -1,4 +1,3 @@
-import { enumUtil } from "@sergei-dyshel/typescript/enum";
 import type { CallSite } from "../callsites";
 
 export enum LogLevel {
@@ -15,8 +14,6 @@ export type LogLevelName = keyof typeof LogLevel;
 export type LogLevelNameLowerCase = Lowercase<LogLevelName>;
 
 export namespace LogLevels {
-  export const util = enumUtil(LogLevel);
-
   export function toString(level: LogLevel) {
     return LogLevel[level] as LogLevelName;
   }
