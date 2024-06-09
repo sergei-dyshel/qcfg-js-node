@@ -76,9 +76,12 @@ export class Logger {
 
       /** By default use ERROR */
       level?: LogLevel;
+
+      /** Hide error class name */
+      hideName?: boolean;
     },
   ) {
-    let msg = (options?.prefix ?? "") + formatError(error);
+    let msg = (options?.prefix ?? "") + formatError(error, options);
     if (error instanceof Error && error.stack) {
       const filteredFrames = parseErrorStack(error.stack)
         .filter(

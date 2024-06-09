@@ -63,6 +63,10 @@ export function string(options?: CommonArgOptions): Handler<string> {
   return (name, value) => (value ? emitArg(name, value, options) : []);
 }
 
+export function number(options?: CommonArgOptions): Handler<number> {
+  return (name, value) => (value ? emitArg(name, value.toString(), options) : []);
+}
+
 export function build<S extends Schema>(schema?: S, data?: Data<S>): string[] {
   if (!data) return [];
   return Object.entries(schema ?? {}).flatMap(([name, handler]) =>

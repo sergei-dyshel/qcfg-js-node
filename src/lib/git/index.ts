@@ -3,10 +3,21 @@ import { LoggableError, assert, assertNotNull } from "@sergei-dyshel/typescript/
 import type { PlainObject } from "@sergei-dyshel/typescript/types";
 import gitUrlParse, { type GitUrl } from "git-url-parse";
 import { join } from "path";
-import * as Cmd from "./cmdline-builder";
-import { pathExists } from "./filesystem";
-import { Runner, type RunnerOptions } from "./runner";
-import type { SubprocessRunOptions } from "./subprocess";
+import * as Cmd from "../cmdline-builder";
+import { pathExists } from "../filesystem";
+import { Runner, type RunnerOptions } from "../runner";
+import type { SubprocessRunOptions } from "../subprocess";
+import { HASH_LEN, parseDiffOutput } from "./diff";
+
+export {
+  GitDiffEntry,
+  GitDiffEntryWithStat,
+  GitDiffFile,
+  GitDiffFileStat,
+  GitDiffFileStatus,
+  GitDiffResult,
+  GitNumStat,
+} from "./diff";
 
 export function gitShortHash(hash: string) {
   return hash.substring(0, 8);
@@ -15,9 +26,8 @@ export function gitShortHash(hash: string) {
 type LogFieldType<T extends string> = T extends `${string}Date` ? Date : string;
 export type GitLogEntry = { [K in keyof typeof LOG_FORMAT]: LogFieldType<K> };
 
-// TODO:
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
-export interface GitStatusEntry {}
+// TODO: implement parsing for git status
+export type GitStatusEntry = string;
 
 export type GitCommandOptions = Cmd.Data<typeof commonSchema>;
 
@@ -131,6 +141,11 @@ export class Git {
     );
   }
 
+  /**
+   * `git status`
+   *
+   * See: https://git-scm.com/docs/git-status.
+   */
   async status(): Promise<GitStatusEntry[]> {
     const result = await this.runCommand(
       "status",
@@ -143,7 +158,7 @@ export class Git {
       },
     );
     const lines = splitOutput(result.stdout!, true /* nullTerminated */);
-    return lines.map((_) => ({}) as GitStatusEntry);
+    return lines.map((line) => line);
   }
 
   /**
@@ -153,26 +168,29 @@ export class Git {
    *
    * This command only runs `git log` without parsing. For parsing use {@link parseLog}
    */
-  async log(options?: {
-    format?: string;
-    date?: string;
-    nullTerminated?: boolean;
-    runOptions?: RunnerOptions;
-  }) {
+  async log(
+    args: string | string[],
+    options?: {
+      format?: string;
+      date?: string;
+      nullTerminated?: boolean;
+      runOptions?: RunnerOptions;
+    },
+  ) {
     return this.runCommand(
       "log",
-      [],
+      typeof args === "string" ? [args] : args,
       Cmd.schema({ format: Cmd.string({ equals: true }), date: Cmd.string({ equals: true }) }),
       options,
     );
   }
 
   /** Run {@link log} and parse output. */
-  async parseLog(): Promise<GitLogEntry[]> {
+  async parseLog(args: string | string[]): Promise<GitLogEntry[]> {
     const keys = Object.keys(LOG_FORMAT);
     const formatStr = Object.values(LOG_FORMAT).join("%x01");
     const output = (
-      await this.log({
+      await this.log(args, {
         format: `format:${formatStr}`,
         nullTerminated: true,
         runOptions: withOutErr,
@@ -311,6 +329,32 @@ export class Git {
     return splitOutput(result.stdout!);
   }
 
+  async diff(
+    args: string | string[],
+    options?: Cmd.Data<typeof diffSchema> & {
+      nullTerminated?: boolean;
+      runOptions?: RunnerOptions;
+    },
+  ) {
+    return this.runCommand("diff", typeof args === "string" ? [args] : args, diffSchema, options);
+  }
+
+  async parseDiff(args: string | string[]) {
+    const result = await this.diff(args, {
+      abbrev: HASH_LEN,
+      raw: true,
+      numstat: true,
+      nullTerminated: true,
+      runOptions: { ...withOutErr },
+    });
+    const lines = splitOutput(result.stdout!, true /* nullTerminated */);
+    try {
+      return parseDiffOutput(lines);
+    } catch (err) {
+      throw GitParseError.wrap(err, "Failed to parse git diff output", result.stdout!);
+    }
+  }
+
   async commitExistsOnRemote(commit: string): Promise<boolean> {
     const branches = await this.branchList({ remotes: true, contains: commit });
     return branches.length > 0;
@@ -326,6 +370,72 @@ export class Git {
       },
     );
     return result.stdout!.trimEnd();
+  }
+
+  /**
+   * `git checkout`
+   *
+   * See: https://www.git-scm.com/docs/git-checkout
+   */
+  async checkout(
+    args: string | string[],
+    options?: Cmd.Data<typeof checkoutSchema> & { runOptions?: SubprocessRunOptions },
+  ) {
+    return this.runCommand(
+      "checkout",
+      typeof args === "string" ? [args] : args,
+      checkoutSchema,
+      logByDefault(options),
+    );
+  }
+
+  /**
+   * `git show`
+   *
+   * See: https://www.git-scm.com/docs/git-checkout
+   */
+  async show(obj: string, options?: { runOptions?: RunnerOptions }) {
+    return this.runCommand("show", [obj], {}, options);
+  }
+
+  async getBlob(hash: string) {
+    return (await this.show(hash, { runOptions: withOutErr })).stdoutBuffer!;
+  }
+
+  /**
+   * `git fetch`
+   *
+   * See: https://www.git-scm.com/docs/git-fetch
+   */
+  async fetch(args: string | string[], options?: { runOptions?: RunnerOptions }) {
+    return this.runCommand(
+      "fetch",
+      typeof args === "string" ? [args] : args,
+      {},
+      logByDefault(options),
+    );
+  }
+
+  /**
+   * `git cat-file`
+   *
+   * See: https://www.git-scm.com/docs/git-cat-file
+   */
+  async catFile(
+    obj: string,
+    options?: Cmd.Data<typeof catFileSchema> & { runOptions?: RunnerOptions },
+  ) {
+    return this.runCommand("cat-file", [obj], catFileSchema, options);
+  }
+
+  async commitExists(hash: string) {
+    const result = await this.catFile(`${hash}^{commit}`, {
+      exists: true,
+      runOptions: { ...withOutErr, ...noCheck },
+    });
+    if (result.exitCode === 128) return false;
+    result.check();
+    return true;
   }
 
   private async run(args: string[], runOptions?: SubprocessRunOptions) {
@@ -439,6 +549,7 @@ const commonSchema = Cmd.schema({
   quiet: Cmd.boolean(),
   porcelain: Cmd.boolean(),
   nullTerminated: Cmd.boolean({ custom: "-z" }),
+  force: Cmd.boolean(),
 });
 
 const branchSchema = Cmd.extend(commonSchema, {
@@ -455,3 +566,20 @@ const configSchema = Cmd.schema({
 
 type ConfigOptions = Cmd.Data<typeof configSchema>;
 type ConfigOptionsWithType = ConfigOptions & { type?: "bool" | "int" };
+
+const diffSchema = Cmd.schema({
+  abbrev: Cmd.number({ equals: true }),
+  raw: Cmd.boolean(),
+  numstat: Cmd.boolean(),
+});
+
+const checkoutSchema = Cmd.schema({
+  branch: Cmd.string({ custom: "-b" }),
+  branchForce: Cmd.string({ custom: "-B" }),
+  detach: Cmd.boolean(),
+});
+
+const catFileSchema = Cmd.schema({
+  /** Just check if object exists */
+  exists: Cmd.boolean({ custom: "-e" }),
+});

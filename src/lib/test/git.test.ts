@@ -3,7 +3,7 @@ import { omit } from "@sergei-dyshel/typescript/object";
 import { test } from "@sergei-dyshel/typescript/testing";
 import { writeFile } from "node:fs/promises";
 import { withTempDirectory } from "../filesystem";
-import { Git, GitConfigError } from "../git";
+import { Git, GitConfigError, GitDiffFileStatus, gitShortHash } from "../git";
 import { ModuleLogger, configureLogging } from "../logging";
 
 const DEFAULT_BRANCH = "master";
@@ -12,9 +12,8 @@ const USER_EMAIL = "tester@test.com";
 const logger = new ModuleLogger();
 
 configureLogging();
-
 function gitTest(name: string, fn: (_: Git) => Promise<void>) {
-  test(name, async () =>
+  return test(name, async () =>
     withTempDirectory(
       async (path) => {
         const git = new Git({ cwd: path, runnerOptions: { log: { logger } } });
@@ -29,11 +28,11 @@ function gitTest(name: string, fn: (_: Git) => Promise<void>) {
   );
 }
 
-gitTest("isGitRoot", async (git) => {
+void gitTest("isGitRoot", async (git) => {
   assert(await git.isRepoRoot());
 });
 
-gitTest("add and check remote", async (git) => {
+void gitTest("add and check remote", async (git) => {
   const uriStr = "git@github.com:sergei-dyshel/git-test.git";
   await git.remoteAdd("origin", uriStr);
   const remotes = await git.remoteList();
@@ -41,13 +40,20 @@ gitTest("add and check remote", async (git) => {
   assert(remotes["origin"].push?.toString() === uriStr);
 });
 
-gitTest("add and commit files, verify log", async (git) => {
+async function commitFile(git: Git, filename: string, content: string, message: string) {
+  await writeFile(filename, content);
+  assertDeepEqual(await git.status(), [`?? ${filename}`]);
+  await git.add(filename);
+  assertDeepEqual(await git.status(), [`A  ${filename}`]);
+  await git.commit({ message });
+  assertDeepEqual(await git.status(), []);
+}
+
+void gitTest("add and commit files, verify log", async (git) => {
   await setUser(git);
-  const file = "test.txt";
-  await writeFile(file, "test");
-  await git.add(file);
-  await git.commit({ message: "test\n\nbody" });
-  const logEntries = await git.parseLog();
+  await commitFile(git, "test.txt", "test", "test\n\nbody");
+  assertDeepEqual(await git.status(), []);
+  const logEntries = await git.parseLog([]);
   const hash = await git.revParseHead();
   assertDeepEqual(
     logEntries.map((l) => omit(l, "authorDate", "committerDate")),
@@ -69,7 +75,7 @@ function setUser(git: Git) {
   return git.setUser(USER_NAME, USER_EMAIL);
 }
 
-gitTest("getting and setting config", async (git) => {
+void gitTest("getting and setting config", async (git) => {
   const key = "test.key";
   const boolVal = true;
 
@@ -87,4 +93,36 @@ gitTest("getting and setting config", async (git) => {
   // unset key on local
   await git.configUnset(key);
   assertDeepEqual(await git.configGet(key), undefined);
+});
+
+void gitTest("diff + getBlob", async (git) => {
+  await commitFile(git, "test1.txt", "test line", "test1");
+  const firstCommit = await git.revParseHead();
+  const TEST2_TXT = "test2.txt";
+  const TEST2_CONTENT = "test line 2";
+  await commitFile(git, TEST2_TXT, TEST2_CONTENT, "test1");
+  const TEST3_TXT = "test3.txt";
+  const TEST3_CONTENT = "test line 3";
+  await commitFile(git, TEST3_TXT, TEST3_CONTENT, "test1");
+  const lastCommit = await git.revParseHead();
+  const diff = await git.parseDiff(`${firstCommit}..${lastCommit}`);
+  // console.log(diff);
+  assertDeepEqual(Object.keys(diff), [TEST2_TXT, TEST3_TXT]);
+  for (const file of [TEST2_TXT, TEST3_TXT]) {
+    assertDeepEqual(omit(diff[file], "dstFile"), {
+      srcFile: undefined,
+      stat: { binary: false, insertions: 1, deletions: 0 },
+      status: GitDiffFileStatus.ADD,
+    });
+    assertDeepEqual(omit(diff[file].dstFile!, "blob"), { path: file, mode: "100644" });
+  }
+  assertDeepEqual((await git.getBlob(diff[TEST2_TXT].dstFile!.blob)).toString(), TEST2_CONTENT);
+});
+
+void gitTest("commit exists", async (git) => {
+  await commitFile(git, "test1.txt", "test line", "test1");
+  const commit = await git.revParseHead();
+  assert(await git.commitExists(commit));
+  assert(await git.commitExists(gitShortHash(commit)));
+  assert(!(await git.commitExists("deadbeef")));
 });

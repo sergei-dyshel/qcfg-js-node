@@ -1,9 +1,8 @@
- 
 import { assertDeepEqual } from "@sergei-dyshel/typescript/error";
 import { test } from "@sergei-dyshel/typescript/testing";
 import { run } from "../subprocess";
 
-test("run inherit stdout/stderr", async () => {
+void test("run inherit stdout/stderr", async () => {
   const result = await run(
     "echo 'this should be printed to stdout' && echo 'this should be printed to stderr'",
     {
@@ -15,7 +14,7 @@ test("run inherit stdout/stderr", async () => {
   assertDeepEqual(result.stderr, undefined);
 });
 
-test("run pipe stdout", async () => {
+void test("run pipe stdout", async () => {
   const stdoutMsg = "captured stdout";
   const result = await run(["echo", "-n", stdoutMsg], {
     stdout: "pipe",
@@ -25,7 +24,7 @@ test("run pipe stdout", async () => {
   assertDeepEqual(result.stderr, undefined);
 });
 
-test("run inherit stdout and redirect stderr to stdout", async () => {
+void test("run inherit stdout and redirect stderr to stdout", async () => {
   const stdoutMsg = "captured stdout";
   const stderrMsg = "captured stderr";
   await run(`echo ${stdoutMsg} && sleep 1 && echo ${stderrMsg} >&2`, {
@@ -35,7 +34,7 @@ test("run inherit stdout and redirect stderr to stdout", async () => {
   });
 });
 
-test("run pipe stdout and redirect stderr to stdout", async () => {
+void test("run pipe stdout and redirect stderr to stdout", async () => {
   const stdoutMsg = "captured stdout";
   const stderrMsg = "captured stderr";
   const result = await run(`echo ${stdoutMsg} && sleep 1 && echo ${stderrMsg} >&2`, {

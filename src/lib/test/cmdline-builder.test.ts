@@ -6,7 +6,7 @@ const schema = Cmd.schema({
   boolFlag: Cmd.boolean(),
 });
 
-test("single boolean flag", () => {
+void test("single boolean flag", () => {
   assertDeepEqual(Cmd.build(schema, { boolFlag: true }), ["--bool-flag"]);
 });
 
@@ -14,7 +14,7 @@ const invertBoolSchemaFalseByDefault = Cmd.schema({
   boolFlag: Cmd.boolean({ invert: true }),
 });
 
-test("invert boolean flag, false by default", () => {
+void test("invert boolean flag, false by default", () => {
   assertDeepEqual(Cmd.build(invertBoolSchemaFalseByDefault, { boolFlag: true }), []);
   assertDeepEqual(Cmd.build(invertBoolSchemaFalseByDefault, { boolFlag: false }), [
     "--no-bool-flag",
@@ -26,7 +26,7 @@ const invertBoolSchemaTrueByDefault = Cmd.schema({
   boolFlag: Cmd.boolean({ invert: true, default: true }),
 });
 
-test("invert boolean flag, true by default", () => {
+void test("invert boolean flag, true by default", () => {
   assertDeepEqual(Cmd.build(invertBoolSchemaTrueByDefault, { boolFlag: true }), []);
   assertDeepEqual(Cmd.build(invertBoolSchemaTrueByDefault, { boolFlag: false }), [
     "--no-bool-flag",
@@ -39,7 +39,7 @@ const extendSchema = {
   stringFlag: Cmd.string(),
 };
 
-test("extend schema", () => {
+void test("extend schema", () => {
   assertDeepEqual(Cmd.build(extendSchema, { boolFlag: true, stringFlag: "value" }), [
     "--bool-flag",
     "--string-flag",
@@ -47,17 +47,17 @@ test("extend schema", () => {
   ]);
 });
 
-test("undefined schema", () => {
+void test("undefined schema", () => {
   assertDeepEqual(Cmd.build(undefined), []);
 });
 
-test("extend with undefined schema", () => {
+void test("extend with undefined schema", () => {
   assertDeepEqual(Cmd.build(Cmd.extend(extendSchema, undefined), { boolFlag: true }), [
     "--bool-flag",
   ]);
 });
 
-test("string argument with equals sign", () => {
+void test("string argument with equals sign", () => {
   assertDeepEqual(
     Cmd.build(
       Cmd.schema({

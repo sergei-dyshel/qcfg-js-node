@@ -20,7 +20,7 @@ export class InstanceLogger extends Logger {
   declare readonly parent: ModuleLogger;
 
   constructor(
-    public readonly instance?: string,
+    public instance?: string,
     options?: InstanceLoggerOptions,
   ) {
     super(options);
