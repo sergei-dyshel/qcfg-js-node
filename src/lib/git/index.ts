@@ -19,10 +19,6 @@ export {
   GitNumStat,
 } from "./diff";
 
-export function gitShortHash(hash: string) {
-  return hash.substring(0, 8);
-}
-
 type LogFieldType<T extends string> = T extends `${string}Date` ? Date : string;
 export type GitLogEntry = { [K in keyof typeof LOG_FORMAT]: LogFieldType<K> };
 
