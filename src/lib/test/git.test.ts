@@ -1,7 +1,7 @@
+import { gitShortHash } from "@sergei-dyshel/typescript";
 import { assert, assertDeepEqual, assertRejects } from "@sergei-dyshel/typescript/error";
 import { omit } from "@sergei-dyshel/typescript/object";
 import { test } from "@sergei-dyshel/typescript/testing";
-import { gitShortHash } from "@sergei-dyshel/typescript/utils";
 import { writeFile } from "node:fs/promises";
 import { withTempDirectory } from "../filesystem";
 import { Git, GitConfigError, GitDiffFileStatus } from "../git";

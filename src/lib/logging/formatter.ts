@@ -1,5 +1,5 @@
+import { callIfDefined } from "@sergei-dyshel/typescript";
 import { formatDate } from "@sergei-dyshel/typescript/datetime";
-import { callIfDefined } from "@sergei-dyshel/typescript/utils";
 import { basename } from "node:path";
 import { inspect } from "node:util";
 import { LogLevels, type LogLevelNameLowerCase, type LogRecord } from ".";
