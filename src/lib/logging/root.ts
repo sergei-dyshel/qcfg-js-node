@@ -43,3 +43,7 @@ export function error(message: string, ...args: unknown[]) {
 export function fatal(message: string, ...args: unknown[]) {
   log(LogLevel.FATAL, message, args);
 }
+
+export function logError(error: unknown) {
+  RootLogger.get().logError(error);
+}

@@ -1,4 +1,4 @@
-import assert from "assert";
+import { assert } from "@sergei-dyshel/typescript/error";
 import { join } from "node:path";
 import { mapSourcePosition, type Position } from "source-map-support";
 import { split } from "./path";
@@ -141,7 +141,9 @@ function parseStackFrame(line: string): ParsedErrorStackFrame {
     };
 
   match = line.match(/^\s+at\s(.*?):(\d+):(\d+)$/);
-  assert(match);
+  if (!match) {
+    throw new Error(`Could not parse stack frame line: ${line}`);
+  }
   return {
     file: match[1],
     line: parseInt(match[2]),
@@ -150,7 +152,9 @@ function parseStackFrame(line: string): ParsedErrorStackFrame {
 }
 
 export function parseErrorStack(stack: string): ParsedErrorStackFrame[] {
-  return stack.split("\n").slice(1).map(parseStackFrame);
+  const match = stack.match(/^\s+at .*/ms);
+  assert(match !== null, "Could not find stacktrace start in error stack");
+  return match[0].split("\n").slice(1).map(parseStackFrame);
 }
 
 /**
