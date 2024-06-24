@@ -9,8 +9,8 @@ import { split } from "./path";
  * Taken from https://github.com/DefinitelyTyped/DefinitelyTyped/blob/master/types/node/globals.d.ts
  */
 declare global {
-  namespace NodeJS {
-    interface CallSite {
+  export namespace NodeJS {
+    export interface CallSite {
       /** Is this an async call (i.e. await, Promise.all(), or Promise.any())? */
       isAsync(): boolean;
 
@@ -40,11 +40,9 @@ declare global {
 }
 
 /**
- * Returns array of {@link NodeJS.Callsite} objects for the current stack trace.
+ * Returns array of CallSite objects for the current stack trace.
  *
- * Implementation borrowed from https://github.com/sindresorhus/callsites/blob/main/index.js. In
- * bundled code locations need to be transformed according to source map with
- * {@link sourceMapCallsite}.
+ * Implementation borrowed from https://github.com/sindresorhus/callsites/blob/main/index.js.
  */
 function getCallsites() {
   const _prepareStackTrace = Error.prepareStackTrace;
@@ -64,7 +62,7 @@ function getCallsites() {
   }
 }
 
-/** Wrapper helper for {@link NodeJS.CallSite}. */
+/** Wrapper helper for CallSite. */
 export class CallSite {
   private _position?: Position;
 
@@ -127,7 +125,7 @@ export interface ParsedErrorStackFrame {
  * readability enhancements
  */
 export function formatErrorStackFrame(frame: ParsedErrorStackFrame): string {
-  return `    at ${frame.function} (${shortenSourcePath(frame.file)}:${frame.line}:${frame.column})`;
+  return `    at ${frame.function ?? "<unnamed>"} (${shortenSourcePath(frame.file)}:${frame.line}:${frame.column})`;
 }
 
 function parseStackFrame(line: string): ParsedErrorStackFrame {

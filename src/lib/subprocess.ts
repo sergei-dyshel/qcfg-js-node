@@ -7,6 +7,7 @@ import {
   type PromiseWithChild,
   type SpawnOptionsWithoutStdio,
   type StdioOptions,
+  type exec,
 } from "node:child_process";
 import { PassThrough, type Readable, type Writable } from "node:stream";
 import * as consumers from "node:stream/consumers";

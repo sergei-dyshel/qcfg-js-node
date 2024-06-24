@@ -56,7 +56,7 @@ export class Git {
     /** Use existing runner */
     runner?: Runner;
 
-    /** Options for new runner if {@link runner} is not provided */
+    /** Options for new runner if {@link Git.runner} is not provided */
     runnerOptions?: RunnerOptions;
 
     /** Override {@link RunnerOptions.cwd} */
@@ -162,7 +162,7 @@ export class Git {
    *
    * https://git-scm.com/docs/git-log
    *
-   * This command only runs `git log` without parsing. For parsing use {@link parseLog}
+   * This command only runs `git log` without parsing. For parsing use {@link Git.parseLog}
    */
   async log(
     args: string | string[],
@@ -181,7 +181,7 @@ export class Git {
     );
   }
 
-  /** Run {@link log} and parse output. */
+  /** Run {@link Git.log} and parse output. */
   async parseLog(args: string | string[]): Promise<GitLogEntry[]> {
     const keys = Object.keys(LOG_FORMAT);
     const formatStr = Object.values(LOG_FORMAT).join("%x01");
@@ -229,7 +229,7 @@ export class Git {
     return result.stdout!.trimEnd();
   }
 
-  /** Like {@link configGet} but force boolean type with `--type`. */
+  /** Like {@link Git.configGet} but force boolean type with `--type`. */
   async configGetBool(
     key: string,
     options?: ConfigOptions & { check?: false },
@@ -240,7 +240,7 @@ export class Git {
     return val === undefined ? undefined : Boolean(val);
   }
 
-  /** Like {@link configGet} but force integer type with `--type`. */
+  /** Like {@link Git.configGet} but force integer type with `--type`. */
   async configGetInt(
     key: string,
     options?: ConfigOptions & { check?: false },
@@ -252,8 +252,8 @@ export class Git {
   }
 
   /**
-   * Like {@link configGet} but if key not defined return default value. The type of returned value
-   * is force with `--type` and matches type of default value.
+   * Like {@link Git.configGet} but if key not defined return default value. The type of returned
+   * value is force with `--type` and matches type of default value.
    */
   async configGetDefault<T extends ConfigValue>(
     key: string,
@@ -280,7 +280,7 @@ export class Git {
    *
    * See: https://git-scm.com/docs/git-config
    *
-   * @param value If undefined then {@link configUnset} is called to delete value.
+   * @param value If undefined then {@link Git.configUnset} is called to delete value.
    */
   async configSet(
     key: string,

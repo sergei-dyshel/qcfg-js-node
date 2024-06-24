@@ -32,7 +32,7 @@ export class Logger {
   }
 
   log(level: LogLevel, message: string, ...args: unknown[]) {
-    /** Skip frames for {@link log}, {@link logImpl} */
+    // Skip frames for log, logImpl
     this.logImpl(level, 1, message, args);
   }
 

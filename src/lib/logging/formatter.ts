@@ -109,7 +109,7 @@ export interface LogFormatterOptions {
   /**
    * Serialize arguments to end of log line, should be used for text-only appenders.
    *
-   * Use {@link serialize} to custom conversion to string.
+   * Use {@link LogFormatterOptions.serialize} to custom conversion to string.
    */
   serializeArgs?: boolean;
 
