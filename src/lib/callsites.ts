@@ -113,19 +113,23 @@ export function getCallsite(framesToSkip = 0): CallSite {
   return new CallSite(getCallsites()[framesToSkip + 1]);
 }
 
-export interface ParsedErrorStackFrame {
-  function?: string;
-  file: string;
-  line: number;
-  column: number;
-}
+export type ParsedErrorStackFrame =
+  | {
+      function?: string;
+      file: string;
+      line: number;
+      column: number;
+    }
+  | { function: string; file?: undefined; line?: undefined; column?: undefined };
 
 /**
  * Formats back to string error stack frame parsed with {@link parseErrorStack}, with some
  * readability enhancements
  */
 export function formatErrorStackFrame(frame: ParsedErrorStackFrame): string {
-  return `    at ${frame.function ?? "<unnamed>"} (${shortenSourcePath(frame.file)}:${frame.line}:${frame.column})`;
+  return frame.file
+    ? `    at ${frame.function ?? "<unnamed>"} (${shortenSourcePath(frame.file)}:${frame.line}:${frame.column})`
+    : `    at ${frame.function}`;
 }
 
 function parseStackFrame(line: string): ParsedErrorStackFrame {
@@ -139,14 +143,19 @@ function parseStackFrame(line: string): ParsedErrorStackFrame {
     };
 
   match = line.match(/^\s+at\s(.*?):(\d+):(\d+)$/);
-  if (!match) {
-    throw new Error(`Could not parse stack frame line: ${line}`);
+  if (match) {
+    return {
+      file: match[1],
+      line: parseInt(match[2]),
+      column: parseInt(match[3]),
+    };
   }
-  return {
-    file: match[1],
-    line: parseInt(match[2]),
-    column: parseInt(match[3]),
-  };
+  match = line.match(/^\s+at\s(.*)$/);
+  if (match) {
+    return { function: match[1] };
+  }
+
+  throw new Error(`Could not parse stack frame line: ${line}`);
 }
 
 export function parseErrorStack(stack: string): ParsedErrorStackFrame[] {

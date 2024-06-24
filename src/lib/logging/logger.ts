@@ -86,9 +86,10 @@ export class Logger {
       const filteredFrames = parseErrorStack(error.stack)
         .filter(
           (frame) =>
-            !frame.file.startsWith("node:") &&
-            !frame.file.includes("ts-node/src/index.ts") &&
-            !frame.file.includes("/qcfg-js-typescript/src/error.ts"),
+            !frame.file ||
+            (!frame.file.startsWith("node:") &&
+              !frame.file.includes("ts-node/src/index.ts") &&
+              !frame.file.includes("/qcfg-js-typescript/src/error.ts")),
         )
         .map((frame) => formatErrorStackFrame(frame));
       msg += "\n" + filteredFrames.join("\n");
