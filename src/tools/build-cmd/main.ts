@@ -5,6 +5,7 @@ import { chmodSync, existsSync, renameSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { isDirectorySync } from "../../lib/filesystem";
 import { stripExt } from "../../lib/path";
+import { shlex } from "../../lib/shlex";
 import { run } from "../../lib/subprocess";
 
 const OUT_BASE = "src";
@@ -53,6 +54,24 @@ const argSpec = {
     short: "d",
     description: "When used with --run, use debug mode (--inspect)",
   }),
+  vscode: cmd.flag({
+    type: cmd.boolean,
+    long: "vscode",
+    short: "V",
+    description: "Build VSCode extension, implies --no-exec",
+  }),
+  noExec: cmd.flag({
+    type: cmd.boolean,
+    long: "no-exec",
+    short: "E",
+    description: "Make command executable, strip .js extension, chmod and add shebang",
+  }),
+  tsconfig: cmd.option({
+    type: cmd.optional(cmd.string),
+    long: "tsconfig",
+    short: "t",
+    description: "Path to tsconfig.json file (defaults to tsconfig.json in current directory)",
+  }),
 } as const;
 
 const appCmd = cmd.command({
@@ -60,6 +79,9 @@ const appCmd = cmd.command({
   description: "Build commands and tools using esbuild bundler",
   args: argSpec,
   handler: async (args) => {
+    const noExec = args.noExec || args.vscode;
+    if (args.run && noExec) throw new Error("Cannot run file without making it executable");
+
     const cwd = args.cwd ?? process.cwd();
     assert(args.files.length > 0, "No entry points specified!");
     const files = args.run ? [args.files[0]] : args.files;
@@ -90,22 +112,28 @@ const appCmd = cmd.command({
         console.log(`Building ${entryPoints.toString()}`);
       }
 
+      const external = ["esbuild"];
+      if (args.vscode) external.push("vscode");
+
       const options: esbuild.BuildOptions = {
         absWorkingDir: cwd,
         entryPoints,
         outdir: OUT_DIR,
         outbase: OUT_BASE,
         entryNames,
-        banner: {
-          // see https://sambal.org/2014/02/passing-options-node-shebang-line/
-          js: '#!/bin/bash\n":" //# comment; exec /usr/bin/env node --enable-source-maps ${INSPECT:+--inspect} ${INSPECT_BRK:+--inspect-brk} "$0" "$@"',
-        },
+        banner: noExec
+          ? undefined
+          : {
+              // see https://sambal.org/2014/02/passing-options-node-shebang-line/
+              js: '#!/bin/bash\n":" //# comment; exec /usr/bin/env node --enable-source-maps ${INSPECT:+--inspect} ${INSPECT_BRK:+--inspect-brk} "$0" "$@"',
+            },
         bundle: true,
         format: "cjs",
         platform: "node",
         target: "es2022",
-        sourcemap: "inline",
-        external: ["esbuild"],
+        sourcemap: noExec ? "linked" : "inline",
+        external,
+        tsconfig: args.tsconfig,
         // preserve function and classes names so not to break reflection
         keepNames: true,
         metafile: args.analyze,
@@ -113,6 +141,23 @@ const appCmd = cmd.command({
         lineLimit: 100,
         color: true,
         logLevel: args.verbose ? "info" : "warning",
+        plugins: [
+          {
+            name: "umd2esm",
+            setup(build) {
+              // https://github.com/evanw/esbuild/issues/1619
+              // https://github.com/microsoft/node-jsonc-parser/issues/57
+              build.onResolve({ filter: /^jsonc-parser/ }, (args) => {
+                const pathUmdMay = require.resolve(args.path, {
+                  paths: [args.resolveDir],
+                });
+                // Call twice the replace is to solve the problem of the path in Windows
+                const pathEsm = pathUmdMay.replace("/umd/", "/esm/").replace("\\umd\\", "\\esm\\");
+                return { path: pathEsm };
+              });
+            },
+          },
+        ],
       };
       const result = await esbuild.build(options);
 
@@ -134,16 +179,20 @@ const appCmd = cmd.command({
       "[dir]/[name]",
     );
 
-    for (const entrypoint of entryPoints) {
-      const out = entrypoint.out;
-      renameSync(out + ".js", out);
-      chmodSync(out, 0o775);
+    if (!noExec) {
+      for (const entrypoint of entryPoints) {
+        const out = entrypoint.out;
+        renameSync(out + ".js", out);
+        chmodSync(out, 0o775);
+      }
     }
 
     if (args.run) {
       const cmd = ["node", "--enable-source-maps"];
       if (args.debug) cmd.push("--inspect-brk");
-      const result = await run([...cmd, entryPoints[0].out, "--", ...args.files.slice(1)]);
+      const fullCmd = [...cmd, entryPoints[0].out, "--", ...args.files.slice(1)];
+      console.log("Running: ", shlex.join(fullCmd));
+      const result = await run(fullCmd);
       process.exit(result.exitCode!);
     }
   },

@@ -2,9 +2,9 @@ import { callIfDefined } from "@sergei-dyshel/typescript";
 import { formatDate } from "@sergei-dyshel/typescript/datetime";
 import { basename } from "node:path";
 import { inspect } from "node:util";
-import { LogLevels, type LogLevelNameLowerCase, type LogRecord } from ".";
 import type { ColorizeFunction } from "../ansi-color";
 import { shortenSourcePath } from "../callsites";
+import { LogLevels, type LogLevelNameLowerCase, type LogRecord } from "./core";
 
 export interface LogFormatterType {
   format: (_: LogRecord) => readonly [string, unknown[]];

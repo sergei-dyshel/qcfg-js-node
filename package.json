@@ -4,7 +4,6 @@
   "description": "Personal library for Node.js",
   "main": "src/index.ts",
   "bin": {
-    "build-and-run-cmd": "./scripts/build-and-run-cmd",
     "build-cmd": "./dist/tools/build-cmd"
   },
   "exports": {
@@ -30,7 +29,8 @@
     "build": "npm run bootstrap && build-cmd -v src/cmd/*/main.ts src/tools/*/main.ts",
     "test": "qcfg-test-all",
     "clean": "rm -rf dist/*",
-    "rebuild": "npm run clean && npm run bootstap && npm run build"
+    "rebuild": "npm run clean && npm run bootstap && npm run build",
+    "dpdm": "qcfg-dpdm"
   },
   "repository": {
     "type": "git",
