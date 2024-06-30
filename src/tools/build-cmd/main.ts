@@ -164,7 +164,7 @@ const appCmd = cmd.command({
       if (args.analyze) {
         // TODO: try setting verbose to true
         console.log(
-          await esbuild.analyzeMetafile(result.metafile!, { verbose: false, color: true }),
+          await esbuild.analyzeMetafile(result.metafile!, { verbose: true, color: true }),
         );
       }
     };
