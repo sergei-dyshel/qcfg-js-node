@@ -5,8 +5,8 @@ import gitUrlParse, { type GitUrl } from "git-url-parse";
 import { join } from "path";
 import * as Cmd from "../cmdline-builder";
 import { pathExists } from "../filesystem";
-import { Runner, type RunnerOptions } from "../runner";
-import type { SubprocessRunOptions } from "../subprocess";
+import { SubprocessRunner, type Runner } from "../runner";
+import type { RunOptions, SubprocessRunOptions } from "../subprocess";
 import { HASH_LEN, parseDiffOutput } from "./diff";
 
 export {
@@ -57,13 +57,13 @@ export class Git {
     runner?: Runner;
 
     /** Options for new runner if {@link Git.runner} is not provided */
-    runnerOptions?: RunnerOptions;
+    run?: RunOptions;
 
-    /** Override {@link RunnerOptions.cwd} */
+    /** Override {@link RunOptions.cwd} */
     cwd?: string;
   }) {
     this.cwd = options?.cwd;
-    this.runner = options?.runner ?? new Runner(options?.runnerOptions);
+    this.runner = options?.runner ?? new SubprocessRunner(options?.run);
     this.runner.mergeOptions({ cwd: options?.cwd, check: true });
   }
 
@@ -95,17 +95,12 @@ export class Git {
    *
    * https://git-scm.com/docs/git-remote#Documentation/git-remote.txt-emaddem
    */
-  async remoteAdd(name: string, url: string, options?: { runOptions?: SubprocessRunOptions }) {
+  async remoteAdd(name: string, url: string, options?: { run?: SubprocessRunOptions }) {
     return this.runCommand(["remote", "add"], [name, url], {}, logByDefault(options));
   }
 
   async remoteList() {
-    const result = await this.runCommand(
-      ["remote", "--verbose"],
-      [],
-      {},
-      { runOptions: withOutErr },
-    );
+    const result = await this.runCommand(["remote", "--verbose"], [], {}, { run: withOutErr });
     return parseGitRemoteVerbose(result.stdout!);
   }
 
@@ -114,7 +109,7 @@ export class Git {
    *
    * https://www.git-scm.com/docs/git-add
    */
-  async add(pathspecs: string | string[], options?: { runOptions?: RunnerOptions }) {
+  async add(pathspecs: string | string[], options?: { run?: RunOptions }) {
     return this.runCommand(
       "add",
       typeof pathspecs === "string" ? [pathspecs] : pathspecs,
@@ -128,7 +123,7 @@ export class Git {
    *
    * https://git-scm.com/docs/git-commit
    */
-  async commit(options?: { message?: string; runOptions?: RunnerOptions }) {
+  async commit(options?: { message?: string; run?: RunOptions }) {
     return this.runCommand(
       "commit",
       [],
@@ -150,7 +145,7 @@ export class Git {
       {
         porcelain: true,
         nullTerminated: true,
-        runOptions: withOutErr,
+        run: withOutErr,
       },
     );
     const lines = splitOutput(result.stdout!, true /* nullTerminated */);
@@ -170,7 +165,7 @@ export class Git {
       format?: string;
       date?: string;
       nullTerminated?: boolean;
-      runOptions?: RunnerOptions;
+      run?: RunOptions;
     },
   ) {
     return this.runCommand(
@@ -189,7 +184,7 @@ export class Git {
       await this.log(args, {
         format: `format:${formatStr}`,
         nullTerminated: true,
-        runOptions: withOutErr,
+        run: withOutErr,
       })
     ).stdout!;
     return output.split("\0").map((commitOut) => {
@@ -219,7 +214,7 @@ export class Git {
   async configGet(key: string, options?: ConfigOptionsWithType & { check?: boolean }) {
     const result = await this.runCommand("config", ["--get", key], configSchema, {
       ...options,
-      runOptions: { ...withOutErr, ...noCheck },
+      run: { ...withOutErr, ...noCheck },
     });
     if (result.exitCode == 1) {
       if (options?.check) throw new GitConfigError("Git config key not found: " + key);
@@ -295,7 +290,7 @@ export class Git {
       logByDefault({
         ...options,
         type: configValueType(value),
-        runOptions: { ...withOutErr },
+        run: { ...withOutErr },
       }),
     );
   }
@@ -307,7 +302,7 @@ export class Git {
       configSchema,
       logByDefault({
         ...options,
-        runOptions: { ...withOutErr },
+        run: { ...withOutErr },
       }),
     );
   }
@@ -320,7 +315,7 @@ export class Git {
   async branchList(options?: Cmd.Data<typeof branchSchema>): Promise<string[]> {
     const result = await this.runCommand("branch", ["--list"], branchSchema, {
       ...options,
-      runOptions: withOut,
+      run: withOut,
     });
     return splitOutput(result.stdout!);
   }
@@ -329,7 +324,7 @@ export class Git {
     args: string | string[],
     options?: Cmd.Data<typeof diffSchema> & {
       nullTerminated?: boolean;
-      runOptions?: RunnerOptions;
+      run?: RunOptions;
     },
   ) {
     return this.runCommand("diff", typeof args === "string" ? [args] : args, diffSchema, options);
@@ -341,7 +336,7 @@ export class Git {
       raw: true,
       numstat: true,
       nullTerminated: true,
-      runOptions: { ...withOutErr },
+      run: { ...withOutErr },
     });
     const lines = splitOutput(result.stdout!, true /* nullTerminated */);
     try {
@@ -362,7 +357,7 @@ export class Git {
       ["HEAD"],
       {},
       {
-        runOptions: withOut,
+        run: withOut,
       },
     );
     return result.stdout!.trimEnd();
@@ -375,7 +370,7 @@ export class Git {
    */
   async checkout(
     args: string | string[],
-    options?: Cmd.Data<typeof checkoutSchema> & { runOptions?: SubprocessRunOptions },
+    options?: Cmd.Data<typeof checkoutSchema> & { run?: SubprocessRunOptions },
   ) {
     return this.runCommand(
       "checkout",
@@ -390,12 +385,12 @@ export class Git {
    *
    * See: https://www.git-scm.com/docs/git-checkout
    */
-  async show(obj: string, options?: { runOptions?: RunnerOptions }) {
+  async show(obj: string, options?: { run?: RunOptions }) {
     return this.runCommand("show", [obj], {}, options);
   }
 
   async getBlob(hash: string) {
-    return (await this.show(hash, { runOptions: withOutErr })).stdoutBuffer!;
+    return (await this.show(hash, { run: withOutErr })).stdoutBuffer!;
   }
 
   /**
@@ -403,7 +398,7 @@ export class Git {
    *
    * See: https://www.git-scm.com/docs/git-fetch
    */
-  async fetch(args: string | string[], options?: { runOptions?: RunnerOptions }) {
+  async fetch(args: string | string[], options?: { run?: RunOptions }) {
     return this.runCommand(
       "fetch",
       typeof args === "string" ? [args] : args,
@@ -417,26 +412,23 @@ export class Git {
    *
    * See: https://www.git-scm.com/docs/git-cat-file
    */
-  async catFile(
-    obj: string,
-    options?: Cmd.Data<typeof catFileSchema> & { runOptions?: RunnerOptions },
-  ) {
+  async catFile(obj: string, options?: Cmd.Data<typeof catFileSchema> & { run?: RunOptions }) {
     return this.runCommand("cat-file", [obj], catFileSchema, options);
   }
 
   async commitExists(hash: string) {
     const result = await this.catFile(`${hash}^{commit}`, {
       exists: true,
-      runOptions: { ...withOutErr, ...noCheck },
+      run: { ...withOutErr, ...noCheck },
     });
     if (result.exitCode === 128) return false;
     result.check();
     return true;
   }
 
-  private async run(args: string[], runOptions?: SubprocessRunOptions) {
+  private async run(args: string[], options?: SubprocessRunOptions) {
     try {
-      return await this.runner.run(["git", ...args], runOptions);
+      return await this.runner.run(["git", ...args], options);
     } catch (err) {
       throw GitRunError.wrap(err, "Git command failed");
     }
@@ -446,7 +438,7 @@ export class Git {
     command: string | string[],
     args: string[],
     commandSchema?: S,
-    options?: Cmd.Data<S> & GitCommandOptions & { runOptions?: SubprocessRunOptions },
+    options?: Cmd.Data<S> & GitCommandOptions & { run?: SubprocessRunOptions },
   ) {
     return this.run(
       [
@@ -454,7 +446,7 @@ export class Git {
         ...Cmd.build(Cmd.extend(commonSchema, commandSchema), options),
         ...args,
       ],
-      options?.runOptions,
+      options?.run,
     );
   }
 }
@@ -484,9 +476,9 @@ const noCheck = {
 } as const;
 
 /** Modify run options to enable logging if not disabled in runner */
-function logByDefault<T extends PlainObject & { runOptions?: SubprocessRunOptions }>(options?: T) {
-  const runOptions: RunnerOptions = { log: { shouldLog: true } };
-  return deepMerge<T>(options, { runOptions } as unknown as T);
+function logByDefault<T extends PlainObject & { run?: SubprocessRunOptions }>(options?: T) {
+  const run: RunOptions = { log: { shouldLog: true } };
+  return deepMerge<T>(options, { run } as unknown as T);
 }
 
 function parseGitRemoteVerbose(output: string) {

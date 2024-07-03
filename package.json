@@ -16,7 +16,9 @@
     "./path": "./src/lib/path.ts",
     "./path-tree": "./src/lib/path-tree.ts",
     "./subprocess": "./src/lib/subprocess.ts",
-    "./git": "./src/lib/git/index.ts"
+    "./git": "./src/lib/git/index.ts",
+    "./ssh": "./src/lib/ssh.ts",
+    "./callsites": "./src/lib/callsites.ts"
   },
   "prettier": "@sergei-dyshel/prettier-config",
   "scripts": {

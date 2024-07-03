@@ -7,13 +7,25 @@ import { join } from "node:path";
 export { emptyDir, pathExists } from "fs-extra";
 
 export function isDirectorySync(path: string) {
-  const stat = fs.statSync(path);
-  return stat.isDirectory();
+  try {
+    const stat = fs.statSync(path);
+    return stat.isDirectory();
+  } catch (err) {
+    const errno = err as NodeJS.ErrnoException;
+    if (errno.code === "ENOENT") return false;
+    throw err;
+  }
 }
 
 export async function isDirectory(path: string) {
-  const stat = await fs.promises.stat(path);
-  return stat.isDirectory();
+  try {
+    const stat = await fs.promises.stat(path);
+    return stat.isDirectory();
+  } catch (err) {
+    const errno = err as NodeJS.ErrnoException;
+    if (errno.code === "ENOENT") return false;
+    throw err;
+  }
 }
 
 export async function withTempDirectory<T>(

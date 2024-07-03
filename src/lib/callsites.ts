@@ -1,4 +1,4 @@
-import { assert } from "@sergei-dyshel/typescript/error";
+import { assert, fail } from "@sergei-dyshel/typescript/error";
 import { join } from "node:path";
 import { mapSourcePosition, type Position } from "source-map-support";
 import { split } from "./path";
@@ -122,14 +122,49 @@ export type ParsedErrorStackFrame =
     }
   | { function: string; file?: undefined; line?: undefined; column?: undefined };
 
+export interface StackFrameFormatOptions {
+  file: /** Use absolute path as in the original stack trace */
+  | "absolute"
+    /**
+     * Shorten to path relative to some appropriate parent directory, like `src`.
+     *
+     * This is the default option
+     */
+    | "relative"
+    /** Use `file://<path>` URL so that clicking it will open corresponding source file */
+    | "url";
+}
+
 /**
  * Formats back to string error stack frame parsed with {@link parseErrorStack}, with some
  * readability enhancements
  */
-export function formatErrorStackFrame(frame: ParsedErrorStackFrame): string {
-  return frame.file
-    ? `    at ${frame.function ?? "<unnamed>"} (${shortenSourcePath(frame.file)}:${frame.line}:${frame.column})`
-    : `    at ${frame.function}`;
+export function formatErrorStackFrame(
+  frame: ParsedErrorStackFrame,
+  options?: StackFrameFormatOptions,
+): string {
+  let line = `    at ${frame.function ?? "<unnamed>"}`;
+  if (frame.file) {
+    const file = () => {
+      switch (options?.file) {
+        case "absolute":
+          return frame.file;
+        case "url":
+          assert(
+            frame.file.startsWith("/"),
+            `Expected absolute path in error stack trace: ${frame.file}`,
+          );
+          return `file:/${frame.file}`;
+        // return `vscode://file${frame.file} `;
+        case "relative":
+        case undefined:
+          return shortenSourcePath(frame.file);
+      }
+      fail("unreachable");
+    };
+    line += ` (${file()}:${frame.line}:${frame.column})`;
+  }
+  return line;
 }
 
 function parseStackFrame(line: string): ParsedErrorStackFrame {

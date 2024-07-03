@@ -13,11 +13,12 @@ const USER_EMAIL = "tester@test.com";
 const logger = new ModuleLogger();
 
 configureLogging();
+
 function gitTest(name: string, fn: (_: Git) => Promise<void>) {
   return test(name, async () =>
     withTempDirectory(
       async (path) => {
-        const git = new Git({ cwd: path, runnerOptions: { log: { logger } } });
+        const git = new Git({ cwd: path, run: { log: { logger } } });
         await git.init({ initialBranch: DEFAULT_BRANCH });
         process.chdir(path);
         return fn(git);

@@ -11,9 +11,27 @@ import {
 } from "node:child_process";
 import { PassThrough, type Readable, type Writable } from "node:stream";
 import * as consumers from "node:stream/consumers";
+import { LogLevel, RootLogger, type Logger } from "./logging";
 import { shlex } from "./shlex";
 
 /** @file Wrapper over Node's `child_process` that more resembles Python's subprocess module. */
+
+const DEFAULT_LOG_PREFIX = "+ ";
+const DEFAULT_LOG_LEVEL = LogLevel.DEBUG;
+
+export interface RunLogOptions {
+  /** Logging occurs only if this flag is set */
+  shouldLog?: boolean;
+
+  /** Logger to use, if not defined logging won't happen */
+  logger?: Logger;
+
+  /** Log level, by default {@link DEFAULT_LOG_LEVEL} */
+  logLevel?: LogLevel;
+
+  /** Prefix to prepend to logged command line, by default {@link DEFAULT_LOG_PREFIX} */
+  prefix?: string;
+}
 
 export type Command = string | string[];
 
@@ -30,7 +48,7 @@ export interface SubprocessRunOptions {
   throwIfAborted?: boolean;
 }
 
-export type RunOptions = SpawnOptionsWithoutStdio & SubprocessRunOptions;
+export type RunOptions = SpawnOptionsWithoutStdio & SubprocessRunOptions & { log?: RunLogOptions };
 
 export class SpawnError extends Error {
   constructor(
@@ -124,6 +142,7 @@ export function spawn(command: Command, options?: RunOptions) {
   const cmd = typeof command === "string" ? command : command[0];
   const args = typeof command === "string" ? [] : command.slice(1);
 
+  logRun(command, options?.log);
   return childProcessSpawn(cmd, args, {
     ...options,
     stdio: buildStdio(options) as StdioOptions,
@@ -171,4 +190,12 @@ export function run(command: Command, options?: RunOptions) {
   const promiseWithChild = promise as PromiseWithChild<RunResult>;
   promiseWithChild.child = proc;
   return promiseWithChild;
+}
+
+export function logRun(command: Command, options?: RunLogOptions) {
+  const logger = options?.logger ?? RootLogger.get();
+  if (!options?.shouldLog) return;
+  const prefix = options.prefix ?? DEFAULT_LOG_PREFIX;
+  const logLevel = options.logLevel ?? DEFAULT_LOG_LEVEL;
+  logger.log(logLevel, prefix + shlexJoin(command));
 }

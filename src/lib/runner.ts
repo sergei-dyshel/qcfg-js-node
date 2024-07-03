@@ -1,50 +1,32 @@
 import { deepMerge } from "@sergei-dyshel/typescript/deep-merge";
-import { LogLevel, type Logger } from "./logging";
-import { run, shlexJoin, type Command, type RunOptions } from "./subprocess";
+import { run, type Command, type RunOptions, type RunResult } from "./subprocess";
 
-const DEFAULT_PREFIX = "+ ";
-const DEFAULT_LOG_LEVEL = LogLevel.DEBUG;
+export type RunFunc<Options = RunOptions> = (
+  command: Command,
+  options?: Options,
+) => Promise<RunResult>;
 
-export interface RunnerLogOptions {
-  /** Logging occurs only if this flag is set */
-  shouldLog?: boolean;
-
-  /** Logger to use, if not defined logging won't happen */
-  logger?: Logger;
-
-  /** Log level, by default {@link DEFAULT_LOG_LEVEL} */
-  logLevel?: LogLevel;
-
-  /** Prefix to prepend to logged command line, by default {@link DEFAULT_PREFIX} */
-  prefix?: string;
-}
-
-export interface RunnerOptions extends RunOptions {
-  log?: RunnerLogOptions;
-}
-
-export class Runner {
-  options: RunnerOptions;
-
-  constructor(options?: RunnerOptions) {
-    this.options = options ?? {};
+export class Runner<Options = RunOptions> {
+  options: Options;
+  constructor(
+    protected runFunc: RunFunc<Options>,
+    options?: Options,
+  ) {
+    this.options = options ?? ({} as Options);
   }
 
-  mergeOptions(options: RunnerOptions) {
+  mergeOptions(options: Options) {
     this.options = deepMerge(this.options, options);
   }
 
-  run(command: Command, options?: RunnerOptions) {
+  run(command: Command, options?: Options) {
     const mergedOptions = deepMerge(this.options, options);
-    this.log(command, mergedOptions);
-    return run(command, mergedOptions);
+    return this.runFunc(command, mergedOptions);
   }
+}
 
-  private log(command: Command, options: RunnerOptions) {
-    const logOptions = options.log ?? {};
-    if (!logOptions.logger || !logOptions.shouldLog) return;
-    const prefix = logOptions.prefix ?? DEFAULT_PREFIX;
-    const logLevel = logOptions.logLevel ?? DEFAULT_LOG_LEVEL;
-    logOptions.logger.log(logLevel, prefix + shlexJoin(command));
+export class SubprocessRunner extends Runner {
+  constructor(options?: RunOptions) {
+    super(run, options);
   }
 }

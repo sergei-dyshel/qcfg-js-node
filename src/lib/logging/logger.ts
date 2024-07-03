@@ -1,5 +1,10 @@
 import { formatError } from "@sergei-dyshel/typescript/error";
-import { formatErrorStackFrame, getCallsite, parseErrorStack } from "../callsites";
+import {
+  type StackFrameFormatOptions,
+  formatErrorStackFrame,
+  getCallsite,
+  parseErrorStack,
+} from "../callsites";
 import { LogLevel, type LogRecord } from "./core";
 import { LogHandler, type LogHandlerOptions, type LogHandlerType } from "./handler";
 
@@ -79,20 +84,27 @@ export class Logger {
 
       /** Hide error class name */
       hideName?: boolean;
+
+      stackFrameFormat?: StackFrameFormatOptions;
     },
   ) {
     let msg = (options?.prefix ?? "") + formatError(error, options);
     if (error instanceof Error && error.stack) {
-      const filteredFrames = parseErrorStack(error.stack)
-        .filter(
-          (frame) =>
-            !frame.file ||
-            (!frame.file.startsWith("node:") &&
-              !frame.file.includes("ts-node/src/index.ts") &&
-              !frame.file.includes("/qcfg-js-typescript/src/error.ts")),
-        )
-        .map((frame) => formatErrorStackFrame(frame));
-      msg += "\n" + filteredFrames.join("\n");
+      try {
+        const filteredFrames = parseErrorStack(error.stack)
+          .filter(
+            (frame) =>
+              !frame.file ||
+              (!frame.file.startsWith("node:") &&
+                !frame.file.includes("ts-node/src/index.ts") &&
+                !frame.file.includes("/qcfg-js-typescript/src/error.ts") &&
+                !frame.file.includes("extensionHostProcess.js")),
+          )
+          .map((frame) => formatErrorStackFrame(frame, options?.stackFrameFormat));
+        msg += "\n" + filteredFrames.join("\n");
+      } catch (err) {
+        msg += `\n(Couldn not parse error stack trace: ${String(err)})\n${String(error.stack)}`;
+      }
     }
     this.logImpl(options?.level ?? LogLevel.ERROR, 1, msg, []);
     if (error instanceof Error && error.cause)
