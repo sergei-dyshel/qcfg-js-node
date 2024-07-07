@@ -1,4 +1,4 @@
-import { fail } from "@sergei-dyshel/typescript/error";
+import { assertNotNull, fail } from "@sergei-dyshel/typescript/error";
 import type { WithRequired } from "@sergei-dyshel/typescript/types";
 import {
   spawn as childProcessSpawn,
@@ -9,7 +9,7 @@ import {
   type StdioOptions,
   type exec,
 } from "node:child_process";
-import { PassThrough, type Readable, type Writable } from "node:stream";
+import { PassThrough, Readable, type Writable } from "node:stream";
 import * as consumers from "node:stream/consumers";
 import { LogLevel, RootLogger, type Logger } from "./logging";
 import { shlex } from "./shlex";
@@ -105,13 +105,13 @@ export class RunResult {
 export type RunResultWithOut = WithRequired<RunResult, "stdout">;
 export type RunResultWithOutErr = WithRequired<RunResult, "stdout" | "stderr">;
 
-export function shlexJoin(command: Command) {
+export function joinCommand(command: Command) {
   return typeof command === "string" ? command : shlex.join(command);
 }
 
 export class RunError extends Error {
   constructor(public readonly result: RunResult) {
-    const cmd = shlexJoin(result.command);
+    const cmd = joinCommand(result.command);
     const reason = result.signalCode
       ? `was killed by signal ${result.signalCode}`
       : `exited with code ${result.exitCode}`;
@@ -121,7 +121,7 @@ export class RunError extends Error {
 }
 
 function buildStdio(options?: RunOptions) {
-  const stdin = options?.stdin ?? "inherit";
+  const stdin = options?.stdin instanceof Readable ? "pipe" : options?.stdin ?? "inherit";
 
   const stdout = options?.stdout ?? "inherit";
 
@@ -157,6 +157,10 @@ export function run(command: Command, options?: RunOptions) {
   const signal = options?.signal;
   if (options?.check && options.throwIfAborted) signal?.throwIfAborted();
   const proc = spawn(command, options);
+  if (options?.stdin instanceof Readable) {
+    assertNotNull(proc.stdin);
+    options.stdin.pipe(proc.stdin);
+  }
 
   const procPromise = new Promise<void>((resolve, reject) => {
     proc.on("error", (err) => {
@@ -197,5 +201,5 @@ export function logRun(command: Command, options?: RunLogOptions) {
   if (!options?.shouldLog) return;
   const prefix = options.prefix ?? DEFAULT_LOG_PREFIX;
   const logLevel = options.logLevel ?? DEFAULT_LOG_LEVEL;
-  logger.log(logLevel, prefix + shlexJoin(command));
+  logger.log(logLevel, prefix + joinCommand(command));
 }

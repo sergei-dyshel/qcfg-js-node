@@ -46,6 +46,7 @@ export const WEAK_AUTH_SSH_CONFIG: SshConfig = {
 function configValueToString(val: unknown) {
   if (typeof val === "boolean") return val ? "yes" : "no";
   if (typeof val === "string") return val;
+  if (typeof val === "number") return val.toString();
   fail(`Unsupported SSH config value type: ${typeof val}`, val);
 }
 
