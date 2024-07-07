@@ -1,3 +1,4 @@
+import { assert } from "@sergei-dyshel/typescript/error";
 import type { CallSite } from "../callsites";
 
 export enum LogLevel {
@@ -28,6 +29,11 @@ export namespace LogLevels {
 
   export function strings() {
     return Object.keys(LogLevel) as LogLevelName[];
+  }
+
+  export function addVerbosity(level: LogLevel, verbosity: number) {
+    assert(verbosity >= 0);
+    return Math.max(level - verbosity, LogLevel.TRACE) as LogLevel;
   }
 }
 
