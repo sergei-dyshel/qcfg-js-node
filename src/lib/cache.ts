@@ -1,4 +1,4 @@
-import { jsonStableStringify } from "@sergei-dyshel/typescript/json";
+import { jsonStableStringify } from "@sergei-dyshel/typescript";
 import { createHash } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
