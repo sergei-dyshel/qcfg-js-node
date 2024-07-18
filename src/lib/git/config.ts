@@ -1,5 +1,11 @@
+/* eslint-disable @typescript-eslint/no-redundant-type-constituents */
+/**
+ * @file Everything related to git config.
+ *
+ *   See: https://git-scm.com/docs/git-config
+ */
 import { deepMerge } from "@sergei-dyshel/typescript/deep-merge";
-import { LoggableError, assertNotNull } from "@sergei-dyshel/typescript/error";
+import { LoggableError } from "@sergei-dyshel/typescript/error";
 import * as Cmd from "../cmdline-builder";
 import { logByDefault, noCheck, runCommand, withOutErr, type RunOptions } from "./common";
 
@@ -9,116 +15,82 @@ export class Error extends LoggableError {}
 /**
  * `git config --get`
  *
- * See: https://git-scm.com/docs/git-config
- *
  * Options:
  *
+ * - `type`: If specified, enforces type of returned value. If not specified and key is known then
+ *   type is inferred from key, otherwise type is `string`.
  * - `check`: If `true` throws an error if key is not found, otherwise returns `undefined`
- *
- * @returns Config value as string (but type can be enforced with `type` option or `undefined` if
- *   key is not found and `check` is `false`. Use {@link getInt} and {@link getBool} to convert value
- *   to proper type.
  */
-export async function get(
+export async function get<K extends keyof KnownKeys>(
+  key: K,
+  options?: Options & { type?: undefined; check: true } & RunOptions,
+): Promise<ValueTypeToValue<KnownKeys[K]>>;
+export async function get<K extends keyof KnownKeys>(
+  key: K,
+  options?: Options & { type?: undefined; check?: undefined | boolean } & RunOptions,
+): Promise<ValueTypeToValue<KnownKeys[K]> | undefined>;
+
+export async function get<T extends ValueType | undefined>(
   key: string,
-  options?: OptionsWithType & { check?: boolean } & RunOptions,
-): Promise<string | undefined>;
-export async function get(
+  options?: Options & { type?: T; check: true } & RunOptions,
+): Promise<ValueTypeToValue<T>>;
+export async function get<T extends ValueType | undefined>(
   key: string,
-  options?: OptionsWithType & { check?: true } & RunOptions,
-): Promise<string>;
+  options?: Options & { type?: T; check?: undefined | boolean } & RunOptions,
+): Promise<ValueTypeToValue<T> | undefined>;
 
 export async function get(
   key: string,
   options?: OptionsWithType & { check?: boolean } & RunOptions,
-) {
-  const result = await runCommand(
-    "config",
-    ["--get", key],
-    configSchema,
-    deepMerge(options, withOutErr, noCheck),
-  );
+): Promise<Value | undefined> {
+  const type = options?.type ?? (key in knownKeys ? knownKeys[key as keyof KnownKeys] : undefined);
+  const result = await runCommand("config", ["--get", key], configSchema, {
+    ...deepMerge(options, withOutErr, noCheck),
+    type: type === "string" ? undefined : type,
+  });
   if (result.exitCode == 1) {
     if (options?.check) throw new Error("Git config key not found: " + key);
     return undefined;
   }
   result.check();
-  return result.stdout!.trimEnd();
+  const value = result.stdout!.trimEnd();
+  switch (type) {
+    case "bool":
+      return Boolean(value);
+    case "int":
+      return Number(value);
+    case "string":
+    case undefined:
+      return value;
+  }
 }
 
-/** Like {@link get} but force boolean type with `--type`. */
-export async function getBool(
-  key: string,
-  options?: Options & { check?: false } & RunOptions,
-): Promise<boolean | undefined>;
-export async function getBool(
-  key: string,
-  options?: Options & { check: true } & RunOptions,
-): Promise<boolean>;
-export async function getBool(key: string, options?: Options & { check?: boolean } & RunOptions) {
-  const val = await get(key, { ...options, type: "bool" });
-  return val === undefined ? undefined : Boolean(val);
-}
-
-/** Like {@link get} but force integer type with `--type`. */
-export async function getInt(
-  key: string,
-  options?: Options & { check?: false } & RunOptions,
-): Promise<number | undefined>;
-export async function getInt(
-  key: string,
-  options?: Options & { check: true } & RunOptions,
-): Promise<number>;
-export async function getInt(key: string, options?: Options & { check?: boolean } & RunOptions) {
-  const val = await get(key, { ...options, type: "int" });
-  return val === undefined ? undefined : Number(val);
-}
+const globalGet = get;
 
 /**
- * Like {@link get} but if key not defined return default value. The type of returned value is force
- * with `--type` and matches type of default value.
+ * Git config --set
+ *
+ * @param value If `key` is known then value type must match it. If undefined then {@link unset} is
+ *   called to delete value.
  */
-export async function getDefault<T extends Value>(
-  key: string,
-  defaultValue: Value,
-  options?: Omit<Options, "type" | "default"> & RunOptions,
-): Promise<T> {
-  const str = await get(key, {
-    ...options,
-    type: valueType(defaultValue),
-    default: String(defaultValue),
-  });
-  assertNotNull(str);
-  return (
-    typeof defaultValue === "boolean"
-      ? Boolean(str)
-      : typeof defaultValue === "number"
-        ? Number(str)
-        : str
-  ) as T;
-}
 
-/**
- * Set config value.
- *
- * See: https://git-scm.com/docs/git-config
- *
- * @param value If undefined then {@link unset} is called to delete value.
- */
-export async function set(
-  key: string,
-  value: Value | undefined,
-  options?: Omit<Options, "default"> & RunOptions,
-) {
+export async function set<K extends string | keyof KnownKeys>(
+  key: K,
+  value: ValueTypeToValue<KeyToValueType<K>> | undefined,
+  options?: Options & RunOptions,
+): Promise<void> {
   if (value === undefined) return unset(key, options);
-  return runCommand(["config"], [key, String(value)], configSchema, {
+  await runCommand(["config"], [key, String(value)], configSchema, {
     ...deepMerge(options, logByDefault, withOutErr),
     type: valueType(value),
   });
 }
 
-export async function unset(key: string, options?: Omit<Options, "default"> & RunOptions) {
-  return runCommand(
+export async function unset(
+  key: keyof KnownKeys | string,
+  options?: Omit<Options, "default"> & RunOptions,
+) {
+  await runCommand(
     ["config"],
     ["--unset", key],
     configSchema,
@@ -135,15 +107,48 @@ export async function setUser(
   await set("user.email", email, options);
 }
 
+/** Getting/setting "remote.<name>.<key>" configs */
+export namespace Remote {
+  export async function get<K extends keyof KnownRemoteKeys>(
+    remote: string,
+    key: K,
+    options?: Options & { type?: undefined; check: true } & RunOptions,
+  ): Promise<ValueTypeToValue<KnownRemoteKeys[K]>>;
+  export async function get<K extends keyof KnownRemoteKeys>(
+    remote: string,
+    key: K,
+    options?: Options & { type?: undefined; check?: undefined | boolean } & RunOptions,
+  ): Promise<ValueTypeToValue<KnownRemoteKeys[K]> | undefined>;
+
+  export async function get<T extends ValueType | undefined>(
+    remote: string,
+    key: string,
+    options?: Options & { type?: T; check: true } & RunOptions,
+  ): Promise<ValueTypeToValue<T>>;
+  export async function get<T extends ValueType | undefined>(
+    remote: string,
+    key: string,
+    options?: Options & { type?: T; check?: undefined | boolean } & RunOptions,
+  ): Promise<ValueTypeToValue<T> | undefined>;
+
+  export async function get(
+    remote: string,
+    key: string,
+    options?: OptionsWithType & { check?: boolean } & RunOptions,
+  ): Promise<Value | undefined> {
+    return globalGet(`remote.${remote}.${key}`, options);
+  }
+}
+
 const configSchema = Cmd.schema({
   global: Cmd.boolean(),
   local: Cmd.boolean(),
   type: Cmd.string(),
-  default: Cmd.string(),
 });
 
-type Options = Cmd.Data<typeof configSchema>;
-type OptionsWithType = Options & { type?: "bool" | "int" };
+type Options = Omit<Cmd.Data<typeof configSchema>, "type">;
+type ValueType = "bool" | "int" | "string";
+type OptionsWithType = Options & { type?: ValueType | undefined };
 
 /** Supported config types */
 type Value = string | number | boolean;
@@ -151,3 +156,61 @@ type Value = string | number | boolean;
 function valueType(value: Value) {
   return typeof value === "boolean" ? "bool" : typeof value === "number" ? "int" : undefined;
 }
+
+const knownKeys = {
+  "user.name": "string",
+  "user.email": "string",
+
+  /**
+   * Set the length object names are abbreviated to.
+   *
+   * String values `auto` and `no` are not supported here.
+   * https://git-scm.com/docs/git-config/#Documentation/git-config.txt-coreabbrev
+   */
+  "core.abbrev": "int",
+
+  /**
+   * When set to true, automatically create a temporary stash entry before the operation begins, and
+   * apply it after the operation ends.
+   *
+   * https://git-scm.com/docs/git-config/#Documentation/git-config.txt-rebaseautoStash
+   */
+  "rebase.autoStash": "bool",
+} as const;
+
+type KnownKeys = typeof knownKeys;
+
+type ValueTypeToValue<T extends ValueType | undefined> = T extends "bool"
+  ? boolean
+  : T extends "int"
+    ? number
+    : string;
+
+type KeyToValueType<K extends string | keyof KnownKeys> = K extends keyof KnownKeys
+  ? KnownKeys[K]
+  : ValueType;
+
+const knownRemoteKeys = {
+  /**
+   * The URL of a remote repository.
+   *
+   * https://git-scm.com/docs/git-config/#Documentation/git-config.txt-remoteltnamegturl
+   */
+  url: "string",
+
+  /**
+   * The default set of "refspec" for git-fetch.
+   *
+   * https://git-scm.com/docs/git-config/#Documentation/git-config.txt-remoteltnamegtfetch
+   */
+  fetch: "string",
+
+  /**
+   * The default program to execute on the remote side when pushing.
+   *
+   * https://git-scm.com/docs/git-config/#Documentation/git-config.txt-remoteltnamegtreceivepack
+   */
+  receivepack: "string",
+} as const;
+
+type KnownRemoteKeys = typeof knownRemoteKeys;

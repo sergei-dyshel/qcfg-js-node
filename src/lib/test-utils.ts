@@ -8,11 +8,9 @@ export async function withCaptureStdout(fn: () => unknown): Promise<string> {
   const origStdoutWrite = process.stdout.write;
 
   process.stdout.write = function write() {
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-expect-error
     // eslint-disable-next-line prefer-rest-params
     origStdoutWrite(...arguments);
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-expect-error
     // eslint-disable-next-line prefer-rest-params
     stdoutPassthrough.write(...arguments);

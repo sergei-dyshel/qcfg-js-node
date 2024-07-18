@@ -38,8 +38,9 @@ void gitTest("add and check remote", async (options) => {
   const uriStr = "git@github.com:sergei-dyshel/git-test.git";
   await Git.Remote.add("origin", uriStr, options);
   const remotes = await Git.Remote.list(options);
-  assert(remotes["origin"].fetch?.toString() === uriStr);
-  assert(remotes["origin"].push?.toString() === uriStr);
+  assertDeepEqual(remotes["origin"].fetch?.toString(), uriStr);
+  assertDeepEqual(remotes["origin"].push?.toString(), uriStr);
+  assertDeepEqual(await Git.Config.Remote.get("origin", "url", options), uriStr);
 });
 
 async function commitFile(
@@ -82,24 +83,37 @@ function setUser(options: Git.RunOptions) {
   return Git.Config.setUser(USER_NAME, USER_EMAIL, options);
 }
 
-void gitTest("getting and setting config", async (options) => {
+void gitTest("getting and setting config (unknown key)", async (options) => {
   const key = "test.key";
   const boolVal = true;
 
   // key not defined
   assertDeepEqual(await Git.Config.get(key, options), undefined);
-  assertDeepEqual(await Git.Config.getDefault(key, true, options), true);
   await assertRejects(() => Git.Config.get(key, { check: true, ...options }), Git.Config.Error);
 
   // set key on local
   await Git.Config.set(key, boolVal, options);
-  assertDeepEqual(await Git.Config.getBool(key, options), boolVal);
+  assertDeepEqual(await Git.Config.get(key, { ...options, type: "bool" }), boolVal);
   // global is still not set
-  assertDeepEqual(await Git.Config.getBool(key, { global: true, ...options }), undefined);
+  assertDeepEqual(await Git.Config.get(key, { global: true, type: "bool", ...options }), undefined);
 
   // unset key on local
   await Git.Config.unset(key, options);
   assertDeepEqual(await Git.Config.get(key, options), undefined);
+});
+
+void gitTest("getting and setting config (known key)", async (options) => {
+  await setUser(options);
+
+  assertDeepEqual<string | undefined>(await Git.Config.get("user.name", options), USER_NAME);
+  assertDeepEqual<number | undefined>(await Git.Config.get("core.abbrev", options), 8);
+
+  await Git.Config.set("rebase.autoStash", true, options);
+  assertDeepEqual<boolean | undefined>(await Git.Config.get("rebase.autoStash", options), true);
+
+  // setting boolean config to non-boolean value shouuld work but triggers type error
+  // @ts-expect-error
+  await Git.Config.set("rebase.autoStash", "invalid", options);
 });
 
 void gitTest("diff + getBlob", async (options) => {
