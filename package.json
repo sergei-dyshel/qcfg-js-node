@@ -18,7 +18,9 @@
     "./subprocess": "./src/lib/subprocess.ts",
     "./git": "./src/lib/git/index.ts",
     "./ssh": "./src/lib/ssh.ts",
-    "./callsites": "./src/lib/callsites.ts"
+    "./callsites": "./src/lib/callsites.ts",
+    "./commander": "./src/lib/commander.ts",
+    "./command-line": "./src/lib/command-line/index.ts"
   },
   "prettier": "@sergei-dyshel/prettier-config",
   "scripts": {
@@ -27,8 +29,8 @@
     "lint": "qcfg-eslint",
     "format-check": "qcfg-prettier",
     "format-write": "qcfg-prettier-write",
-    "bootstrap": "npx tsx src/tools/build-cmd/main.ts src/tools/build-cmd/main.ts",
-    "build": "npm run bootstrap && build-cmd -v src/cmd/*/main.ts src/tools/*/main.ts",
+    "build-build-cmd": "npx tsx src/tools/build-cmd/main.ts src/tools/build-cmd/main.ts",
+    "build": "npm run build-build-cmd && build-cmd -v src/cmd/*/main.ts src/tools/*/main.ts",
     "test": "qcfg-test-all",
     "clean": "rm -rf dist/*",
     "rebuild": "npm run clean && npm run bootstap && npm run build",
@@ -45,10 +47,12 @@
   },
   "homepage": "https://github.com/sergei-dyshel/qcfg-js-node",
   "dependencies": {
+    "@commander-js/extra-typings": "^12.1.0",
     "@npmcli/package-json": "^5.1.0",
     "@sergei-dyshel/typescript": "*",
     "ansicolor": "^2.0.3",
     "cmd-ts": "^0.13.0",
+    "commander": "^12.1.0",
     "esbuild": "^0.21.2",
     "fs-extra": "^11.1.1",
     "git-url-parse": "^14.0.0",

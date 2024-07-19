@@ -4,6 +4,7 @@ import * as esbuild from "esbuild";
 import { chmodSync, existsSync, renameSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { isDirectorySync } from "../../lib/filesystem";
+import { RootLogger, configureLogging } from "../../lib/logging";
 import { stripExt } from "../../lib/path";
 import { shlex } from "../../lib/shlex";
 import { run } from "../../lib/subprocess";
@@ -11,6 +12,8 @@ import { run } from "../../lib/subprocess";
 const OUT_BASE = "src";
 const OUT_DIR = "dist";
 const DEFAULT_MAIN_FILE = "main.ts";
+
+const logger = RootLogger.get();
 
 const argSpec = {
   files: cmd.restPositionals({
@@ -64,7 +67,8 @@ const argSpec = {
     type: cmd.boolean,
     long: "no-exec",
     short: "E",
-    description: "Make command executable, strip .js extension, chmod and add shebang",
+    description:
+      "If not given, make command executable, strip .js extension, chmod and add shebang",
   }),
   tsconfig: cmd.option({
     type: cmd.optional(cmd.string),
@@ -79,6 +83,7 @@ const appCmd = cmd.command({
   description: "Build commands and tools using esbuild bundler",
   args: argSpec,
   handler: async (args) => {
+    configureLogging();
     const noExec = args.noExec || args.vscode;
     if (args.run && noExec) throw new Error("Cannot run file without making it executable");
 
@@ -112,7 +117,11 @@ const appCmd = cmd.command({
         console.log(`Building ${entryPoints.toString()}`);
       }
 
-      const external = ["esbuild"];
+      const external = [
+        "esbuild",
+        // required but not used by `http-cookie-agent` used by `NodeJS-midway`
+        "deasync",
+      ];
       if (args.vscode) external.push("vscode");
 
       const options: esbuild.BuildOptions = {
@@ -163,7 +172,7 @@ const appCmd = cmd.command({
 
       if (args.analyze) {
         // TODO: try setting verbose to true
-        console.log(
+        logger.info(
           await esbuild.analyzeMetafile(result.metafile!, { verbose: true, color: true }),
         );
       }
@@ -190,8 +199,8 @@ const appCmd = cmd.command({
     if (args.run) {
       const cmd = ["node", "--enable-source-maps"];
       if (args.debug) cmd.push("--inspect-brk");
-      const fullCmd = [...cmd, entryPoints[0].out, "--", ...args.files.slice(1)];
-      console.log("Running: ", shlex.join(fullCmd));
+      const fullCmd = [...cmd, entryPoints[0].out, ...args.files.slice(1)];
+      logger.info("Running: ", shlex.join(fullCmd));
       const result = await run(fullCmd);
       process.exit(result.exitCode!);
     }
