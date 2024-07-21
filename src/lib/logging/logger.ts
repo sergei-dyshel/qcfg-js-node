@@ -1,9 +1,9 @@
 import { formatError } from "@sergei-dyshel/typescript/error";
 import {
-  type StackFrameFormatOptions,
   formatErrorStackFrame,
   getCallsite,
   parseErrorStack,
+  type StackFrameFormatOptions,
 } from "../callsites";
 import { LogLevel, type LogRecord } from "./core";
 import { LogHandler, type LogHandlerOptions, type LogHandlerType } from "./handler";
@@ -55,10 +55,6 @@ export class Logger {
 
   info(message: string, ...args: unknown[]) {
     this.logWithLevel(LogLevel.INFO, message, args);
-  }
-
-  notice(message: string, ...args: unknown[]) {
-    this.logWithLevel(LogLevel.NOTICE, message, args);
   }
 
   warn(message: string, ...args: unknown[]) {

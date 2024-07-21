@@ -28,10 +28,6 @@ export function info(message: string, ...args: unknown[]) {
   log(LogLevel.INFO, message, args);
 }
 
-export function notice(message: string, ...args: unknown[]) {
-  log(LogLevel.NOTICE, message, args);
-}
-
 export function warn(message: string, ...args: unknown[]) {
   log(LogLevel.WARNING, message, args);
 }

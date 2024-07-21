@@ -32,7 +32,7 @@ export function parseTimestamp(ts: string, now: Date, end = false) {
   const month = groups.month
     ? parseInt(groups.month) - 1
     : // if parsed day is in the future, assume previous month
-      groups.day && day > now.getDay()
+      groups.day && day > now.getDate()
       ? dateAddDays(now, { months: -1 }).getMonth()
       : now.getMonth();
 

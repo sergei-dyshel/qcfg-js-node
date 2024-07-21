@@ -5,10 +5,9 @@ export enum LogLevel {
   TRACE = 1,
   DEBUG = 2,
   INFO = 3,
-  NOTICE = 4,
-  WARNING = 5,
-  ERROR = 6,
-  FATAL = 7,
+  WARNING = 4,
+  ERROR = 5,
+  FATAL = 6,
 }
 
 export type LogLevelName = keyof typeof LogLevel;
