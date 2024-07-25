@@ -57,11 +57,15 @@ const argSpec = {
     short: "d",
     description: "When used with --run, use debug mode (--inspect)",
   }),
-  vscode: cmd.flag({
+  vscode_ext: cmd.flag({
     type: cmd.boolean,
-    long: "vscode",
-    short: "V",
+    long: "vscode-ext",
     description: "Build VSCode extension, implies --no-exec",
+  }),
+  vscode_mock: cmd.flag({
+    type: cmd.boolean,
+    long: "vscode-mock",
+    description: "Build with VSCode mock",
   }),
   noExec: cmd.flag({
     type: cmd.boolean,
@@ -84,7 +88,9 @@ const appCmd = cmd.command({
   args: argSpec,
   handler: async (args) => {
     configureLogging();
-    const noExec = args.noExec || args.vscode;
+    if (args.vscode_ext && args.vscode_mock)
+      throw new Error("Must use only one of --vscode-ext or --vscode-mock");
+    const noExec = args.noExec || args.vscode_ext;
     if (args.run && noExec) throw new Error("Cannot run file without making it executable");
 
     const cwd = args.cwd ?? process.cwd();
@@ -111,6 +117,15 @@ const appCmd = cmd.command({
       };
     });
 
+    const nodeArgs = ["--enable-source-maps"];
+    if (args.vscode_mock) {
+      // ts-node is needed to compile vscode mock TS files on the fly
+      nodeArgs.push("-r", "@sergei-dyshel/vscode/mock-register", "-r", "ts-node/register");
+    }
+    const nodeArgsStr = nodeArgs.join(" ");
+    // see https://sambal.org/2014/02/passing-options-node-shebang-line/
+    const nodeShebang = `#!/bin/bash\n":" //# comment; exec /usr/bin/env node ${nodeArgsStr} \${INSPECT:+--inspect} \${INSPECT_BRK:+--inspect-brk} "$0" "$@"`;
+
     const runEsbuild = async (entryPoints: string[], entryNames: string) => {
       if (entryPoints.length === 0) return;
       if (args.verbose) {
@@ -122,8 +137,7 @@ const appCmd = cmd.command({
         // required but not used by `http-cookie-agent` used by `NodeJS-midway`
         "deasync",
       ];
-      if (args.vscode) external.push("vscode");
-
+      if (args.vscode_ext || args.vscode_mock) external.push("vscode");
       const options: esbuild.BuildOptions = {
         absWorkingDir: cwd,
         entryPoints,
@@ -133,13 +147,12 @@ const appCmd = cmd.command({
         banner: noExec
           ? undefined
           : {
-              // see https://sambal.org/2014/02/passing-options-node-shebang-line/
-              js: '#!/bin/bash\n":" //# comment; exec /usr/bin/env node --enable-source-maps ${INSPECT:+--inspect} ${INSPECT_BRK:+--inspect-brk} "$0" "$@"',
+              js: nodeShebang,
             },
         bundle: true,
         format: "cjs",
         platform: "node",
-        target: "es2022",
+        target: "es2023",
         sourcemap: noExec ? "linked" : "inline",
         external,
         tsconfig: args.tsconfig,
@@ -197,7 +210,7 @@ const appCmd = cmd.command({
     }
 
     if (args.run) {
-      const cmd = ["node", "--enable-source-maps"];
+      const cmd = ["node", ...nodeArgs];
       if (args.debug) cmd.push("--inspect-brk");
       const fullCmd = [...cmd, entryPoints[0].out, ...args.files.slice(1)];
       logger.info("Running: ", shlex.join(fullCmd));

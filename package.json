@@ -4,7 +4,8 @@
   "description": "Personal library for Node.js",
   "main": "src/index.ts",
   "bin": {
-    "build-cmd": "./dist/tools/build-cmd"
+    "build-cmd": "./dist/tools/build-cmd",
+    "qcfg-resolve-package": "./dist/tools/qcfg-resolve-package"
   },
   "exports": {
     "./lock": "./src/lib/lock/index.ts",
@@ -30,7 +31,7 @@
     "format-check": "qcfg-prettier",
     "format-write": "qcfg-prettier-write",
     "build-build-cmd": "npx tsx src/tools/build-cmd/main.ts src/tools/build-cmd/main.ts",
-    "build": "npm run build-build-cmd && build-cmd -v src/cmd/*/main.ts src/tools/*/main.ts",
+    "build": "npm run build-build-cmd && build-cmd -v src/tools/*",
     "test": "qcfg-test-all",
     "clean": "rm -rf dist/*",
     "rebuild": "npm run clean && npm run bootstap && npm run build",
@@ -58,6 +59,7 @@
     "git-url-parse": "^14.0.0",
     "ora": "^8.0.1",
     "proper-lockfile": "^4.1.2",
+    "resolve-package-path": "^4.0.3",
     "shlex": "^2.1.2",
     "source-map-support": "^0.5.21",
     "tsx": "^4.7.0",
