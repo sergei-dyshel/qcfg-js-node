@@ -3,8 +3,8 @@ import { LoggableError, assert } from "@sergei-dyshel/typescript/error";
 import * as Cmd from "../cmdline-builder";
 import type { RunFunc } from "../runner";
 import {
-  type Command,
   run as subprocessRun,
+  type Command,
   type RunOptions as SubprocessRunOptions,
 } from "../subprocess";
 
