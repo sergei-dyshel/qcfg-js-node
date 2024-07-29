@@ -31,7 +31,7 @@
     "format-check": "qcfg-prettier",
     "format-write": "qcfg-prettier-write",
     "build-build-cmd": "npx tsx src/tools/build-cmd/main.ts src/tools/build-cmd/main.ts",
-    "build": "npm run build-build-cmd && build-cmd -v src/tools/*",
+    "build": "npm run build-build-cmd && build-cmd src/tools/*",
     "test": "qcfg-test-all",
     "clean": "rm -rf dist/*",
     "rebuild": "npm run clean && npm run bootstap && npm run build",
