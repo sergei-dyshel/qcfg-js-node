@@ -52,6 +52,7 @@
     "@npmcli/package-json": "^5.1.0",
     "@sergei-dyshel/typescript": "*",
     "ansicolor": "^2.0.3",
+    "clipanion": "^4.0.0-rc.3",
     "cmd-ts": "^0.13.0",
     "commander": "^12.1.0",
     "esbuild": "^0.21.2",
@@ -63,6 +64,7 @@
     "shlex": "^2.1.2",
     "source-map-support": "^0.5.21",
     "tsx": "^4.7.0",
+    "typanion": "^3.14.0",
     "yargs": "^17.7.2"
   },
   "devDependencies": {
