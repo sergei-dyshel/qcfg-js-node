@@ -318,7 +318,7 @@ const appCmd = cmd.command({
       const cmd = ["node", ...nodeArgs];
       if (args.debug) cmd.push("--inspect-brk");
       const fullCmd = [...cmd, entryPoints[0].out, ...args.files.slice(1)];
-      logger.info("Running: ", shlex.join(fullCmd));
+      logger.debug("Running: ", shlex.join(fullCmd));
       const result = await run(fullCmd);
       process.exit(result.exitCode!);
     }

@@ -19,6 +19,7 @@ function main() {
   );
 
   process.stdout.write(dirname(packageJson));
+  if (process.stdout.isTTY) process.stdout.write("\n");
 }
 
 main();
