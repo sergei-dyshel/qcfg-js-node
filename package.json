@@ -8,6 +8,7 @@
     "qcfg-resolve-package": "./dist/tools/qcfg-resolve-package"
   },
   "exports": {
+    ".": "./src/lib/index.ts",
     "./lock": "./src/lib/lock/index.ts",
     "./cache": "./src/lib/cache.ts",
     "./filesystem": "./src/lib/filesystem.ts",
