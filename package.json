@@ -22,7 +22,8 @@
     "./ssh": "./src/lib/ssh.ts",
     "./callsites": "./src/lib/callsites.ts",
     "./commander": "./src/lib/commander.ts",
-    "./command-line": "./src/lib/command-line/index.ts"
+    "./command-line": "./src/lib/command-line/index.ts",
+    "./os": "./src/lib/os.ts"
   },
   "prettier": "@sergei-dyshel/prettier-config",
   "scripts": {
