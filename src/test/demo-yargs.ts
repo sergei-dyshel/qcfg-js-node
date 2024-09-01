@@ -22,7 +22,7 @@ async function main() {
         addCommonOptions(
           yargs.positional("arg", { type: "string", default: "def" }).options({
             opt: { type: "string" },
-            choice: { type: "string", choices: ["one", "two", "three"] },
+            choice: { type: "string", choices: ["one", "two", "three"] as const },
           }),
         ),
       (args) => {
