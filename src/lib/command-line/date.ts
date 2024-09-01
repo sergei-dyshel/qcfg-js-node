@@ -1,49 +1,78 @@
 import { RegExpWithNamedGroups } from "@sergei-dyshel/typescript";
 import { assert, assertNotNull } from "@sergei-dyshel/typescript/error";
 
-const timestampRegex = new RegExpWithNamedGroups(
+const TIMESTAMP_REGEX = new RegExpWithNamedGroups(
   "^(((((?<year>\\d+)-)?(?<month>\\d+)-)?(?<day>\\d+))\\.)?((?<hour>\\d+)(:(?<minute>\\d+)(:(?<second>\\d+))?)?)?$",
 );
 
-export function parseDateRange(start: string, end?: string, now?: Date) {
+const DURATION_REGEX = new RegExpWithNamedGroups(
+  "((?<weeks>\\d+)w)?((?<days>\\d+)d)?((?<hours>\\d+)h)?((?<minutes>\\d+)m)?",
+);
+
+export function parseDateRange(start?: string, end?: string, now?: Date) {
   if (!now) now = new Date();
   const startDate = parseTimestamp(start, now);
-  const endDate = end ? parseTimestamp(end, now, true /* end */) : now;
+  const endDate = end ? parseTimestamp(end, now, startDate) : now;
   return { start: startDate, end: endDate };
 }
 
-export function parseTimestamp(ts: string, now: Date, end = false) {
+function myParseInt<D>(s: string | undefined, defaultValue: D): D | number {
+  return s ? parseInt(s) : defaultValue;
+}
+
+export function parseTimestamp(ts: string | undefined, now: Date, start?: Date) {
+  // by default return inverval from one hour ago until now
+  if (ts === undefined) return start ? now : new Date(now.getTime() - 60 * 60 * 1000);
+
   assert(ts != "", "Timestamp cannot be empty");
-  const match = timestampRegex.exec(ts);
+  const match = TIMESTAMP_REGEX.exec(ts);
+  if (!match) {
+    const match = DURATION_REGEX.exec(ts);
+    assertNotNull(match, `Invalid timestamp format: ${ts}`);
+
+    const totalDuration =
+      (myParseInt(match.groups?.minutes, 0) +
+        (myParseInt(match.groups?.hours, 0) +
+          (myParseInt(match.groups?.days, 0) + myParseInt(match.groups?.weeks, 0) * 7) * 24) *
+          60) *
+      60;
+
+    return start
+      ? new Date(start.getTime() + totalDuration * 1000)
+      : new Date(now.getTime() - totalDuration * 1000);
+  }
   assertNotNull(match, `Invalid timestamp format: ${ts}`);
 
   const groups = match.groups!;
-  const second = groups.second ? parseInt(groups.second) : end ? 59 : 0;
-  const minute = groups.minute ? parseInt(groups.minute) : end ? 59 : 0;
-  const hour = groups.hour ? parseInt(groups.hour) : end ? 23 : 0;
+  const second = groups.second ? parseInt(groups.second) : start ? 59 : 0;
+  const minute = groups.minute ? parseInt(groups.minute) : start ? 59 : 0;
+  const hour = groups.hour ? parseInt(groups.hour) : start ? 23 : 0;
 
-  const day = groups.day
-    ? parseInt(groups.day)
-    : // if parsed hour is in the future, assume yesterday
-      groups.hour && hour > now.getHours()
-      ? dateAddDays(now, { days: -1 }).getDate()
-      : now.getDate();
+  const base = start ?? now;
 
-  const month = groups.month
-    ? parseInt(groups.month) - 1
-    : // if parsed day is in the future, assume previous month
-      groups.day && day > now.getDate()
-      ? dateAddDays(now, { months: -1 }).getMonth()
-      : now.getMonth();
+  const day = myParseInt(groups.day, base.getDate());
+  const month = myParseInt(groups.month, base.getMonth() + 1) - 1;
+  const year = myParseInt(groups.year, base.getFullYear());
 
-  const year = groups.year
-    ? parseInt(groups.year)
-    : // if parsed month is in the future, assume previous year
-      groups.month && month > now.getMonth()
-      ? dateAddDays(now, { months: -1 }).getMonth()
-      : now.getFullYear();
+  const date = new Date(year, month, day, hour, minute, second);
 
-  return new Date(year, month, day, hour, minute, second);
+  for (const delta of [{ days: 1 }, { months: 1 }, { years: 1 }]) {
+    if (start) {
+      // parsing end date
+      if (date.getTime() <= start.getTime()) {
+        const fixed = dateAddDays(date, delta);
+        if (fixed.getTime() > start.getTime()) return fixed;
+      }
+    } else {
+      // parsing start date
+      if (date.getTime() > now.getTime()) {
+        const fixed = dateSubtractDays(date, delta);
+        if (fixed.getTime() <= now.getTime()) return fixed;
+      }
+    }
+  }
+
+  return date;
 }
 
 export function dateAddTime(
@@ -74,6 +103,18 @@ export function dateAddDays(date: Date, delta: { days?: number; months?: number;
   d.setMonth(d.getMonth() + (delta.months ?? 0));
   d.setDate(d.getDate() + (delta.days ?? 0));
   return d;
+}
+
+export function dateSubtractDays(
+  date: Date,
+  delta: { days?: number; months?: number; years?: number },
+) {
+  const neg = (a: number | undefined) => (a ? -a : undefined);
+  return dateAddDays(date, {
+    days: neg(delta.days),
+    months: neg(delta.months),
+    years: neg(delta.years),
+  });
 }
 
 /** Make `Date` use UTC timezone by default */
