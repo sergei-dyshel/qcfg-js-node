@@ -28,11 +28,7 @@
   "prettier": "@sergei-dyshel/prettier-config",
   "scripts": {
     "watch": "tsc --watch --noEmit",
-    "compile": "tsc --noEmit",
-    "build-build-cmd": "npx tsx src/tools/build-cmd/main.ts src/tools/build-cmd/main.ts",
-    "build": "npm run build-build-cmd && build-cmd src/tools/*",
-    "clean": "rm -rf dist/*",
-    "rebuild": "npm run clean && npm run bootstap && npm run build"
+    "clean": "rm -rf dist/*"
   },
   "repository": {
     "type": "git",

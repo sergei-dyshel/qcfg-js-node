@@ -9,3 +9,10 @@ import? './node_modules/@sergei-dyshel/typescript/export.just'
 
 _default:
     just --list
+
+
+build-build-cmd:
+    tsx src/tools/build-cmd/main.ts src/tools/build-cmd/main.ts
+
+build: build-build-cmd
+    build-cmd src/tools/*
