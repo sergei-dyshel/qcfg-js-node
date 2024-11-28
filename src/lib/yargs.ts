@@ -26,6 +26,11 @@ export function create(options?: {
    * `-o<output>`.
    */
   shortOptionGroups?: boolean;
+
+  /**
+   * Do not add default handler
+   */
+  noFail?: boolean;
 }) {
   let y = yargs(hideBin(process.argv));
 
@@ -40,17 +45,6 @@ export function create(options?: {
     .demandCommand()
     .recommendCommands()
     .strict()
-    .fail((msg, err, _yargs) => {
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-      if (err) {
-        process.stderr.write(formatError(err) + "\n");
-        if (process.exitCode === undefined) process.exitCode = 1;
-        process.exit();
-      } else {
-        process.stderr.write(msg + "\n");
-        process.exit(1);
-      }
-    })
     // .usageConfiguration({'hide-types': true})
     .parserConfiguration({
       "strip-aliased": true,
@@ -61,11 +55,30 @@ export function create(options?: {
       "halt-at-non-option": options?.haltAtNonOptions,
     });
 
+  if (!options?.noFail) {
+    y = y.fail((msg, err, _yargs) => {
+      defaultFail(msg, err);
+    });
+  }
+
   if (options?.completion ?? true) {
     y = y.completion();
   }
 
   return y;
+}
+
+export function defaultFail(msg: string, err: Error, options?: { showCause?: boolean }) {
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  if (err) {
+    process.stderr.write(formatError(err, options) + "\n");
+    // some errors may set exit code, we do not want to override it
+    if (process.exitCode === undefined) process.exitCode = 1;
+    process.exit();
+  } else {
+    process.stderr.write(msg + "\n");
+    process.exit(1);
+  }
 }
 
 /** For use in commands that don't need builder argument */
