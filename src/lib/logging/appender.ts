@@ -1,3 +1,5 @@
+import { Console } from "node:console";
+
 export interface LogAppender {
   append: (logLine: string, args?: unknown[]) => void;
 }
@@ -5,10 +7,13 @@ export interface LogAppender {
 export class ConsoleAppender implements LogAppender {
   console: Console;
 
-  constructor(stream: NodeJS.WriteStream = process.stderr) {
-    this.console = new console.Console({
-      stdout: stream,
-      stderr: stream,
+  constructor(options?: {
+    /** Allow writing to stdout, otherwise will use stderr for all logging */
+    allowStdout?: boolean;
+  }) {
+    this.console = new Console({
+      stdout: options?.allowStdout ? process.stdout : process.stderr,
+      stderr: process.stderr,
     });
   }
   append(logLine: string, args?: unknown[]) {
