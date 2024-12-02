@@ -55,6 +55,8 @@ export namespace LogFormat {
   /** Only message, default template */
   export const MSG_ONLY: LogFormatTemplate = [message];
 
+  export const INSTANCE_AND_MSG: LogFormatTemplate = [instance, message];
+
   /** Omit location data */
   export const SHORT = [level, module, instance, message];
 
