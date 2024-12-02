@@ -1,4 +1,7 @@
 import * as p from "node:path";
+import { default as which } from "which";
+
+export { which };
 
 export function split(path: string): string[] {
   return path.split(Path.sep);
