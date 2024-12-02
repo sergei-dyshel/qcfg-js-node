@@ -229,7 +229,10 @@ const appCmd = cmd.command({
         "esbuild",
         // required but not used by `http-cookie-agent` used by `NodeJS-midway`
         "deasync",
+        // oclif inflates bundle by 10MB of typescript, which it doesn't use
+        "typescript",
       ];
+
       if (args.vscode_ext || args.vscode_mock) external.push("vscode");
       const options: esbuild.BuildOptions = {
         absWorkingDir: cwd,
