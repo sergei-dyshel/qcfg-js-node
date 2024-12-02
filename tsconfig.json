@@ -1,6 +1,7 @@
 {
   "extends": "@sergei-dyshel/typescript/tsconfig.json",
   "compilerOptions": {
+    "baseUrl": "src",
     "rootDir": "src",
     "outDir": "out"
   },
