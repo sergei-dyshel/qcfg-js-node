@@ -1,8 +1,9 @@
+import { jsoncParser } from "@sergei-dyshel/typescript";
 import { assert } from "@sergei-dyshel/typescript/error";
 import * as cmd from "cmd-ts";
 import * as esbuild from "esbuild";
 import { chmodSync, existsSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
-import { stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { basename, dirname, join, relative } from "node:path";
 import { isDirectorySync } from "../../lib/filesystem";
 import { LogLevel, RootLogger, configureLogging } from "../../lib/logging";
@@ -121,6 +122,32 @@ async function getInputTimestamps(inputs: string[]) {
   );
 }
 
+async function getRawTsconfig(cwd: string, tsconfig?: string) {
+  // if tsconfig.json extends another config esbuild sometimes doesn't expand it right and
+  // some feature may not work as expected (for example configuring `baseUrl: ${configDir}`
+  // in base config). If we detect extended config, we use tsc to recursively expand it
+  // and feed it to esbuild as raw JSON.
+
+  tsconfig = tsconfig ?? "tsconfig.json";
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+  const tsconfigJson = jsoncParser.parse(
+    await readFile(join(cwd, tsconfig), "utf8"),
+    undefined /* errors */,
+    {
+      allowTrailingComma: true,
+    },
+  );
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+  return tsconfigJson.extends
+    ? (
+        await run(["npx", "tsc", "--project", tsconfig, "--showConfig"], {
+          cwd,
+          stdout: "pipe",
+        })
+      ).stdout!
+    : undefined;
+}
+
 const appCmd = cmd.command({
   name: basename(__filename),
   description: "Build commands and tools using esbuild bundler",
@@ -233,6 +260,9 @@ const appCmd = cmd.command({
         "typescript",
       ];
 
+      const tsconfigRaw = await getRawTsconfig(cwd, args.tsconfig);
+      const tsconfig = tsconfigRaw ? undefined : args.tsconfig;
+
       if (args.vscode_ext || args.vscode_mock) external.push("vscode");
       const options: esbuild.BuildOptions = {
         absWorkingDir: cwd,
@@ -251,7 +281,8 @@ const appCmd = cmd.command({
         target: "es2023",
         sourcemap: noExec ? "linked" : "inline",
         external,
-        tsconfig: args.tsconfig,
+        tsconfig,
+        tsconfigRaw,
         // preserve function and classes names so not to break reflection
         keepNames: true,
         metafile: !args.noMetafile,
