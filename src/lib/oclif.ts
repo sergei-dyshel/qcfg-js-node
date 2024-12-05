@@ -29,10 +29,11 @@ export abstract class BaseCommand extends Command {
 
   protected args!: CommandArgs<typeof BaseCommand>;
   protected flags!: CommandFlags<typeof BaseCommand>;
+  protected parsed_argv!: string[];
 
   public override async init(): Promise<void> {
     await super.init();
-    const { args, flags } = await this.parse({
+    const { args, flags, argv } = await this.parse({
       flags: this.ctor.flags,
       baseFlags: (super.ctor as typeof BaseCommand).baseFlags,
       enableJsonFlag: this.ctor.enableJsonFlag,
@@ -41,6 +42,7 @@ export abstract class BaseCommand extends Command {
     });
     this.flags = flags;
     this.args = args;
+    this.parsed_argv = argv as string[];
   }
 
   abstract override run(): Promise<void>;
@@ -50,6 +52,7 @@ export abstract class BaseCommand extends Command {
  * Helper function to be used for {@link Command.flags} property to ensure proper type..
  */
 export const extendsFlagsInput = extendsType<FlagsInput>();
+export const extendsArgsInput = extendsType<ArgsInput>();
 
 export const verbosityFlags = extendsFlagsInput({
   verbose: Flags.boolean({
@@ -107,6 +110,7 @@ export type CommandFlags<T extends typeof Command> = Interfaces.InferredFlags<
 export type CommandArgs<T extends typeof Command> = Interfaces.InferredArgs<T["args"]>;
 
 type FlagsInput = (typeof Command)["flags"];
+type ArgsInput = (typeof Command)["args"];
 
 /**
  * Wrapper of {@link execute}. Feeds proper package.json mock so that bundled executable can run on
