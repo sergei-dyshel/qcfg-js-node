@@ -43,7 +43,10 @@ export async function parse(args: string | string[], options?: RunOptions): Prom
   ).stdout!;
   return output.split("\0").map((commitOut) => {
     const fields = commitOut.split("\x01");
-    assert(fields.length === keys.length);
+    assert(
+      fields.length === keys.length,
+      `Git logline does not match requested format: ${commitOut}`,
+    );
     return Object.fromEntries(
       keys.map((key, i) => [key, key.endsWith("Date") ? new Date(fields[i]) : fields[i]]),
     ) as Entry;
