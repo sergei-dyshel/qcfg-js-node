@@ -1,12 +1,24 @@
-import "reflect-metadata";
+/**
+ * @file Wrapper for oclif framework.
+ *
+ *   To work properly, you ust export {@link allOclifCommands} and {@link OclifHelp } in main file,
+ *   e.g.:
+ *
+ *   ```ts
+ *   export { allOclifCommands, OclifHelp } from "@sergei-dyshel/node/oclif";
+ *   ```
+ */
 
-import { Args, Command, execute, Flags, type Interfaces } from "@oclif/core";
+import { Args, Command, CommandHelp, execute, Flags, Help, type Interfaces } from "@oclif/core";
 import { Hook, type Hooks } from "@oclif/core/hooks";
 import type { PJSON } from "@oclif/core/interfaces";
 import * as PluginAutoComplete from "@sergei-dyshel/oclif-plugin-autocomplete-cjs";
 import { assert } from "@sergei-dyshel/typescript/error";
 import { DefaultMap } from "@sergei-dyshel/typescript/map";
+import { mapKeys } from "@sergei-dyshel/typescript/object";
+import { camelCase, kebabCase } from "@sergei-dyshel/typescript/string";
 import { extendsType } from "@sergei-dyshel/typescript/types";
+import "reflect-metadata";
 import { configureLogging, type LogHandlerOptions, LogLevel, LogLevels } from "./logging";
 import { basename } from "./path";
 
@@ -33,15 +45,19 @@ export abstract class BaseCommand extends Command {
 
   public override async init(): Promise<void> {
     await super.init();
+
+    const toKebabCase = (key: string) => kebabCase(key);
+    const toCamelCase = (key: string) => camelCase(key);
+
     const { args, flags, argv } = await this.parse({
-      flags: this.ctor.flags,
-      baseFlags: (super.ctor as typeof BaseCommand).baseFlags,
+      flags: mapKeys(this.ctor.flags, toKebabCase),
+      baseFlags: mapKeys((super.ctor as typeof BaseCommand).baseFlags, toKebabCase),
       enableJsonFlag: this.ctor.enableJsonFlag,
-      args: this.ctor.args,
+      args: mapKeys(this.ctor.args, toKebabCase),
       strict: this.ctor.strict,
     });
-    this.flags = flags;
-    this.args = args;
+    this.flags = mapKeys(flags, toCamelCase) as typeof this.flags;
+    this.args = mapKeys(args, toCamelCase) as typeof this.args;
     this.parsed_argv = argv as string[];
   }
 
@@ -172,6 +188,10 @@ export function runCli(
             identifier: Object.keys({ allOclifCommands })[0],
           },
           topicSeparator: " ",
+          helpClass: {
+            target: filename,
+            identifier: OclifHelp.name,
+          },
           helpOptions: {
             flagSortOrder: "none",
             maxWidth: 80,
@@ -183,18 +203,13 @@ export function runCli(
   });
 }
 
+/** Must export this symbol in main file */
 export const allOclifCommands: Record<string, any> = {
   ...PluginAutoComplete.commands,
 };
 
 /**
  * Class decorator for adding Oclif command.
- *
- * Must export {@link allOclifCommands} in main file, e.g.:
- *
- * ```ts
- * export { allOclifCommands } from "@sergei-dyshel/node/oclif";
- * ```
  */
 export function command(
   name: string,
@@ -231,4 +246,15 @@ const allHooks = new DefaultMap<string | number, string[]>(() => []);
 export function addHook<T extends keyof Hooks>(type: T, hook: Hook<T>) {
   const name = hook.name;
   allHooks.get(type).push(name);
+}
+
+/** Must export this class in main file */
+export class OclifHelp extends Help {
+  protected override getCommandHelpClass(command: Command.Loadable): CommandHelp {
+    return new CommandHelp(
+      { ...command, flags: mapKeys(command.flags, (key) => kebabCase(key)) },
+      this.config,
+      this.opts,
+    );
+  }
 }

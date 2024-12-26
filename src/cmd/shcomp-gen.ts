@@ -19,9 +19,10 @@ import {
   CommandFlags,
   extendsFlagsInput,
   Flags,
+  OclifHelp,
   runCli,
 } from "../lib/oclif";
-export { allOclifCommands };
+export { allOclifCommands, OclifHelp };
 
 const ENV_PREFIX = "QCFG_SHCOMP_";
 
@@ -44,10 +45,8 @@ abstract class RootCommand extends BaseCommandWithVerbosity {
       char: "s",
       summary: "Save generation parameters to database",
     }),
-    zsh_dir: Flags.directory({
+    zshDir: Flags.directory({
       summary: "Path to directory with zsh completion scripts",
-      aliases: ["zsh-dir"],
-      helpLabel: "--zsh-dir",
       env: ENV_PREFIX + "ZSH_DIR",
       default: "/usr/local/share/zsh/site-functions",
     }),
@@ -209,7 +208,7 @@ class Generator {
     protected readonly command: string,
     protected readonly options: {
       logger?: Logger;
-      zsh_dir: string;
+      zshDir: string;
       force?: boolean;
       database?: Database;
       save?: boolean;
@@ -219,7 +218,7 @@ class Generator {
   ) {
     // perhaps some more escaping is needed
     this.scriptName = "_" + command;
-    this.dstPath = pathJoin(this.options.zsh_dir, this.scriptName);
+    this.dstPath = pathJoin(this.options.zshDir, this.scriptName);
     this.logger = this.options.logger ?? logger;
   }
 
