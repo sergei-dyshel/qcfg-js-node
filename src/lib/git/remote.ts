@@ -36,7 +36,7 @@ function parseGitRemoteVerbose(output: string) {
   const result: List = {};
   const lines = splitOutput(output);
   for (const line of lines) {
-    const match = /^(\S+)\s+(\S+)\s+\((\S+)\)$/.exec(line);
+    const match = /^(\S+)\s+(\S+)\s+\((\S+)\)/.exec(line);
     if (!match) throw new ParseError("Failed to parse git remote output line: " + line);
     const [_, name, uriStr, type] = match;
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
