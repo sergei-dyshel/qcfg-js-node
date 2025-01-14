@@ -17,27 +17,27 @@ export function log(level: LogLevel, message: string, ...args: unknown[]) {
 }
 
 export function trace(message: string, ...args: unknown[]) {
-  log(LogLevel.TRACE, message, args);
+  log(LogLevel.TRACE, message, ...args);
 }
 
 export function debug(message: string, ...args: unknown[]) {
-  log(LogLevel.DEBUG, message, args);
+  log(LogLevel.DEBUG, message, ...args);
 }
 
 export function info(message: string, ...args: unknown[]) {
-  log(LogLevel.INFO, message, args);
+  log(LogLevel.INFO, message, ...args);
 }
 
 export function warn(message: string, ...args: unknown[]) {
-  log(LogLevel.WARNING, message, args);
+  log(LogLevel.WARNING, message, ...args);
 }
 
 export function error(message: string, ...args: unknown[]) {
-  log(LogLevel.ERROR, message, args);
+  log(LogLevel.ERROR, message, ...args);
 }
 
 export function fatal(message: string, ...args: unknown[]) {
-  log(LogLevel.FATAL, message, args);
+  log(LogLevel.FATAL, message, ...args);
 }
 
 export function logError(error: unknown) {
