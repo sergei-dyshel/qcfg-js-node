@@ -1,5 +1,5 @@
 import { LogLevel } from "./core";
-import { Logger } from "./logger";
+import { type ErrorFormatOptions, Logger } from "./logger";
 
 export class RootLogger extends Logger {
   protected constructor() {
@@ -40,6 +40,6 @@ export function fatal(message: string, ...args: unknown[]) {
   log(LogLevel.FATAL, message, ...args);
 }
 
-export function logError(error: unknown) {
-  RootLogger.get().logError(error);
+export function logError(error: unknown, options?: ErrorFormatOptions) {
+  RootLogger.get().logError(error, options);
 }
