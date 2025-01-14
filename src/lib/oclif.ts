@@ -17,7 +17,7 @@ import { assert } from "@sergei-dyshel/typescript/error";
 import { DefaultMap } from "@sergei-dyshel/typescript/map";
 import { mapKeys } from "@sergei-dyshel/typescript/object";
 import { camelCase, kebabCase } from "@sergei-dyshel/typescript/string";
-import { extendsType } from "@sergei-dyshel/typescript/types";
+import { canBeUndefined, extendsType } from "@sergei-dyshel/typescript/types";
 import "reflect-metadata";
 import { configureLogging, type LogHandlerOptions, LogLevel, LogLevels } from "./logging";
 import { basename } from "./path";
@@ -66,10 +66,13 @@ export abstract class BaseCommand extends Command {
     const toCamelCase = (key: string) => camelCase(key);
 
     const { args, flags, argv } = await this.parse({
-      flags: mapKeys(this.ctor.flags, toKebabCase),
-      baseFlags: mapKeys((super.ctor as typeof BaseCommand).baseFlags, toKebabCase),
+      flags: mapKeys(canBeUndefined(this.ctor.flags) ?? {}, toKebabCase),
+      baseFlags: mapKeys(
+        canBeUndefined((super.ctor as typeof BaseCommand).baseFlags) ?? {},
+toKebabCase,
+),
       enableJsonFlag: this.ctor.enableJsonFlag,
-      args: mapKeys(this.ctor.args, toKebabCase),
+      args: mapKeys(canBeUndefined(this.ctor.args) ?? {}, toKebabCase),
       strict: this.ctor.strict,
     });
     this.flags = mapKeys(flags, toCamelCase) as typeof this.flags;
@@ -108,7 +111,8 @@ export abstract class BaseCommandWithVerbosity extends BaseCommand {
   /** Use to override logging configuration in subclasses */
   protected logHandlerOptions: Omit<LogHandlerOptions, "level"> | undefined = {};
 
-  public override async init(): Promise<void> {
+  /** Must call parent method when overriding */
+  public override async init() {
     await super.init();
 
     if (this.flags.verbose) {
