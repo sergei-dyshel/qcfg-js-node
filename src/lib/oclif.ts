@@ -69,8 +69,8 @@ export abstract class BaseCommand extends Command {
       flags: mapKeys(canBeUndefined(this.ctor.flags) ?? {}, toKebabCase),
       baseFlags: mapKeys(
         canBeUndefined((super.ctor as typeof BaseCommand).baseFlags) ?? {},
-toKebabCase,
-),
+        toKebabCase,
+      ),
       enableJsonFlag: this.ctor.enableJsonFlag,
       args: mapKeys(canBeUndefined(this.ctor.args) ?? {}, toKebabCase),
       strict: this.ctor.strict,
@@ -203,6 +203,7 @@ export function runCli(
 
   return execute({
     dir: dirname,
+    development: true,
     loadOptions: {
       root: dirname,
       pjson: {
