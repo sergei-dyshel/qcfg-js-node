@@ -11,7 +11,7 @@
 
 import { Args, Command, CommandHelp, execute, Flags, Help, type Interfaces } from "@oclif/core";
 import { Hook, type Hooks } from "@oclif/core/hooks";
-import type { PJSON } from "@oclif/core/interfaces";
+import type { BooleanFlag, PJSON } from "@oclif/core/interfaces";
 import * as PluginAutoComplete from "@sergei-dyshel/oclif-plugin-autocomplete-cjs";
 import { assert } from "@sergei-dyshel/typescript/error";
 import { DefaultMap } from "@sergei-dyshel/typescript/map";
@@ -23,6 +23,22 @@ import { configureLogging, type LogHandlerOptions, LogLevel, LogLevels } from ".
 import { basename } from "./path";
 
 export { Args, Command, Flags, Hook };
+
+/**
+ * A better version of {@link Flags.boolean} that upon parsing will be inferred as `boolean` or
+ * `boolean | undefined` (depending on presense of default value).
+ *
+ * {@link Flags.boolean} will be inferred as `any`.
+ */
+export function booleanFlag(
+  options: Partial<BooleanFlag<boolean>> & { default: boolean },
+): BooleanFlag<boolean>;
+export function booleanFlag(
+  options?: Partial<BooleanFlag<boolean>>,
+): BooleanFlag<boolean | undefined>;
+export function booleanFlag(options?: Partial<BooleanFlag<boolean>>) {
+  return Flags.boolean(options);
+}
 
 /**
  * Provides basic machinery for writing Oclif commands. You should always subclass this class and
