@@ -21,6 +21,22 @@ export function configureLogging(options?: { handler?: LogHandlerOptions }) {
   registerLogHandler(new LogHandler(options?.handler));
 }
 
+export interface ErrorFormatOptions {
+  /** Prefix error message with this string */
+  prefix?: string;
+
+  /** By default use ERROR */
+  level?: LogLevel;
+
+  /** Hide error class name */
+  hideName?: boolean;
+
+  /** Hide stack */
+  hideStack?: boolean;
+
+  stackFrameFormat?: StackFrameFormatOptions;
+}
+
 export interface LoggerOptions {
   parent?: Logger;
   level?: LogLevel;
@@ -69,23 +85,9 @@ export class Logger {
     this.logWithLevel(LogLevel.FATAL, message, args);
   }
 
-  logError(
-    error: unknown,
-    options?: {
-      /** Prefix error message with this string */
-      prefix?: string;
-
-      /** By default use ERROR */
-      level?: LogLevel;
-
-      /** Hide error class name */
-      hideName?: boolean;
-
-      stackFrameFormat?: StackFrameFormatOptions;
-    },
-  ) {
+  logError(error: unknown, options?: ErrorFormatOptions) {
     let msg = (options?.prefix ?? "") + formatError(error, options);
-    if (error instanceof Error && error.stack) {
+    if (!options?.hideStack && error instanceof Error && error.stack) {
       try {
         const filteredFrames = parseErrorStack(error.stack)
           .filter(
