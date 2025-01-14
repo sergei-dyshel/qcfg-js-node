@@ -19,7 +19,7 @@ import { mapKeys } from "@sergei-dyshel/typescript/object";
 import { camelCase, kebabCase } from "@sergei-dyshel/typescript/string";
 import { canBeUndefined, extendsType } from "@sergei-dyshel/typescript/types";
 import "reflect-metadata";
-import { configureLogging, type LogHandlerOptions, LogLevel, LogLevels } from "./logging";
+import { configureLogging, logError, type LogHandlerOptions, LogLevel, LogLevels } from "./logging";
 import { basename } from "./path";
 
 export { Args, Command, Flags, Hook };
@@ -128,6 +128,15 @@ export abstract class BaseCommandWithVerbosity extends BaseCommand {
         level: LogLevels.addVerbosity(this.verboseBaseLogLevel, this.verbosity),
       },
     });
+  }
+
+  protected override catch(err: Interfaces.CommandError) {
+    logError(err, {
+      hideName: this.verbosity == 0,
+      hideStack: this.verbosity == 0,
+    });
+    this.exit(err.exitCode ?? 1);
+    return Promise.resolve();
   }
 }
 
