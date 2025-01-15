@@ -13,7 +13,7 @@ import {
 } from "./common";
 
 export * as Config from "./config";
-export * as Diff from "./diff1";
+export * as Diff from "./diff";
 export * as Log from "./log";
 export * as Remote from "./remote";
 

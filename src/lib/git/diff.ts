@@ -1,13 +1,16 @@
+import { deepMerge } from "@sergei-dyshel/typescript/deep-merge";
 import { assert, assertNotNull } from "@sergei-dyshel/typescript/error";
 import type { ValueOf } from "@sergei-dyshel/typescript/types";
+import * as Cmd from "../cmdline-builder";
+import { ParseError, type RunOptions, runCommand, splitOutput, withOutErr } from "./common";
 
-export interface GitNumStat {
+export interface NumStat {
   insertions: number;
   deletions: number;
 }
 
-export namespace GitNumStat {
-  export function sum(files: (GitDiffFileStat | GitNumStat | undefined)[]) {
+export namespace NumStat {
+  export function sum(files: (FileStat | NumStat | undefined)[]) {
     const sum = { insertions: 0, deletions: 0 };
     for (const file of files) {
       if (file && (!("binary" in file) || !file.binary)) {
@@ -19,9 +22,9 @@ export namespace GitNumStat {
   }
 }
 
-export type GitDiffFileStat = { binary: true } | ({ binary: false } & GitNumStat);
+export type FileStat = { binary: true } | ({ binary: false } & NumStat);
 
-export const enum GitDiffFileStatus {
+export const enum FileStatus {
   ADD = "A",
   DELETE = "D",
   RENAME = "R",
@@ -30,54 +33,85 @@ export const enum GitDiffFileStatus {
   TYPE_CHANGE = "T",
 }
 
-export interface GitDiffFile {
+export interface File {
   mode: string;
   blob: string;
   path: string;
 }
 
-export type GitDiffEntry =
+export type Entry =
   | {
-      status: GitDiffFileStatus.ADD;
+      status: FileStatus.ADD;
       srcFile: undefined;
-      dstFile: GitDiffFile;
+      dstFile: File;
     }
   | {
-      status: GitDiffFileStatus.DELETE;
-      srcFile: GitDiffFile;
+      status: FileStatus.DELETE;
+      srcFile: File;
       dstFile: undefined;
     }
   | {
-      status: GitDiffFileStatus.MODIFY | GitDiffFileStatus.TYPE_CHANGE;
-      srcFile: GitDiffFile;
-      dstFile: GitDiffFile;
+      status: FileStatus.MODIFY | FileStatus.TYPE_CHANGE;
+      srcFile: File;
+      dstFile: File;
     }
   | {
-      status: GitDiffFileStatus.RENAME | GitDiffFileStatus.COPY;
+      status: FileStatus.RENAME | FileStatus.COPY;
       score: number;
-      srcFile: GitDiffFile;
-      dstFile: GitDiffFile;
+      srcFile: File;
+      dstFile: File;
     };
 
-export namespace GitDiffEntry {
-  export function path(entry: GitDiffEntry) {
+export namespace Entry {
+  export function path(entry: Entry) {
     return (entry.dstFile?.path ?? entry.srcFile?.path)!;
   }
 }
 
-export type GitDiffEntryWithStat = GitDiffEntry & { stat: GitDiffFileStat };
+export type EntryWithStat = Entry & { stat: FileStat };
 
-export type GitDiffResult = Record<string, GitDiffEntryWithStat>;
+export type Result = Record<string, EntryWithStat>;
 
 export const HASH_LEN = 40;
 
-export function parseDiffOutput(origLines: string[]): GitDiffResult {
+/**
+ * Run `git diff`.
+ *
+ * Does not parses output. See:https://git-scm.com/docs/git-diff
+ */
+export async function raw(
+  args: string | string[],
+  options?: Cmd.Data<typeof diffSchema> & {
+    nullTerminated?: boolean;
+  } & RunOptions,
+) {
+  return runCommand("diff", typeof args === "string" ? [args] : args, diffSchema, options);
+}
+
+/** Like {@link raw} but parses output. */
+export async function parse(args: string | string[], options?: RunOptions) {
+  const result = await raw(args, {
+    ...deepMerge(options, withOutErr),
+    abbrev: HASH_LEN,
+    raw: true,
+    numstat: true,
+    nullTerminated: true,
+  });
+  const lines = splitOutput(result.stdout!, true /* nullTerminated */);
+  try {
+    return parseDiffOutput(lines);
+  } catch (err) {
+    throw ParseError.wrap(err, "Failed to parse git diff output", result.stdout!);
+  }
+}
+
+function parseDiffOutput(origLines: string[]): Result {
   // make a copy so that original array stays intact in log
   const lines = [...origLines];
   const NULL_MODE = "000000";
   const NULL_HASH = "0".repeat(HASH_LEN);
 
-  const result: GitDiffResult = {};
+  const result: Result = {};
 
   // when running `git dff --raw --numstat` it will output first lines for --raw and then
   // lines for --numstat
@@ -90,13 +124,13 @@ export function parseDiffOutput(origLines: string[]): GitDiffResult {
     if (line.startsWith(":")) {
       // --raw line, see https://git-scm.com/docs/git-diff#_raw_output_format
       const [srcMode, dstMode, srcBlob, dstBlob, statusScore] = line.substring(1).split(/\s+/);
-      const status = statusScore[0] as GitDiffFileStatus;
+      const status = statusScore[0] as FileStatus;
       const srcPath = lines.shift();
       assertNotNull(srcPath);
       const srcFile = { path: srcPath, mode: srcMode, blob: srcBlob };
       const dstFile = { path: srcPath, mode: dstMode, blob: dstBlob };
-      const common = { srcFile, dstFile, stat: { binary: true } as GitDiffFileStat };
-      if (status === GitDiffFileStatus.COPY || status === GitDiffFileStatus.RENAME) {
+      const common = { srcFile, dstFile, stat: { binary: true } as FileStat };
+      if (status === FileStatus.COPY || status === FileStatus.RENAME) {
         const score = Number(statusScore.substring(1));
         assert(!Number.isNaN(score), "Invalid score");
         const dstPath = lines.shift();
@@ -107,7 +141,7 @@ export function parseDiffOutput(origLines: string[]): GitDiffResult {
           score,
           dstFile: { path: dstPath, mode: dstMode, blob: dstBlob },
         };
-      } else if (status === GitDiffFileStatus.ADD) {
+      } else if (status === FileStatus.ADD) {
         assert(srcMode === NULL_MODE);
         assert(srcBlob === NULL_HASH);
         result[srcPath] = {
@@ -115,7 +149,7 @@ export function parseDiffOutput(origLines: string[]): GitDiffResult {
           status,
           srcFile: undefined,
         };
-      } else if (status === GitDiffFileStatus.DELETE) {
+      } else if (status === FileStatus.DELETE) {
         assert(dstMode === NULL_MODE);
         assert(dstBlob === NULL_HASH);
         result[srcPath] = {
@@ -141,7 +175,7 @@ export function parseDiffOutput(origLines: string[]): GitDiffResult {
         entry = result[dstPath];
         assertNotNull(entry, "Num stat file missing in raw entries");
         assert(
-          (entry.status === GitDiffFileStatus.COPY || entry.status === GitDiffFileStatus.RENAME) &&
+          (entry.status === FileStatus.COPY || entry.status === FileStatus.RENAME) &&
             entry.srcFile.path === srcPath,
           "Source path for numstat and raw entries does not math",
         );
@@ -163,3 +197,9 @@ export function parseDiffOutput(origLines: string[]): GitDiffResult {
   }
   return result;
 }
+
+const diffSchema = Cmd.schema({
+  abbrev: Cmd.number({ equals: true }),
+  raw: Cmd.boolean(),
+  numstat: Cmd.boolean(),
+});
