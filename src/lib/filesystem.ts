@@ -1,10 +1,10 @@
 import type { Awaitable } from "@sergei-dyshel/typescript/types";
 import * as fs from "node:fs";
-import { rm } from "node:fs/promises";
+import { lstat, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-export { emptyDir, pathExists } from "fs-extra";
+export { emptyDir, pathExists as exists } from "fs-extra";
 
 export function isDirectorySync(path: string) {
   try {
@@ -37,5 +37,16 @@ export async function withTempDirectory<T>(
     return await fn(path);
   } finally {
     await rm(path, { recursive: true, force: true });
+  }
+}
+
+export async function isSymbolicLink(path: string) {
+  try {
+    const stat = await lstat(path);
+    return stat.isSymbolicLink();
+  } catch (err) {
+    const errno = err as NodeJS.ErrnoException;
+    if (errno.code === "ENOENT") return false;
+    throw err;
   }
 }
