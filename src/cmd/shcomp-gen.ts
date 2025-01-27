@@ -4,12 +4,10 @@ import { assertNotNull } from "@sergei-dyshel/typescript/error";
 import { dedent } from "@sergei-dyshel/typescript/string";
 import { ElementType } from "@sergei-dyshel/typescript/types";
 import { zod } from "@sergei-dyshel/typescript/zod";
-import { pathExists } from "fs-extra";
-import { InstanceLogger, LogFormat, Logger, LogHandlerOptions, RootLogger } from "lib/logging";
-import { pathJoin, which } from "lib/path";
-import { run } from "lib/subprocess";
 import { readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { exists } from "../lib/filesystem";
+import { InstanceLogger, LogFormat, Logger, LogHandlerOptions, RootLogger } from "../lib/logging";
 import {
   allOclifCommands,
   Args,
@@ -22,6 +20,8 @@ import {
   OclifHelp,
   runCli,
 } from "../lib/oclif";
+import { pathJoin, which } from "../lib/path";
+import { run } from "../lib/subprocess";
 export { allOclifCommands, OclifHelp };
 
 const ENV_PREFIX = "QCFG_SHCOMP_";
@@ -68,7 +68,7 @@ abstract class RootCommand extends BaseCommandWithVerbosity {
       logger.debug("Database file not specified");
       return {};
     }
-    if (!(await pathExists(dbPath))) {
+    if (!(await exists(dbPath))) {
       if (options.requireExisting) throw new Error("Database file does not exist");
       logger.debug(`Database file ${dbPath} does not exist`);
       return {};
@@ -317,7 +317,7 @@ class Generator {
   /** Returns true if script was written to file */
   async writeGenerated(generatedScript: string) {
     let oldScript = "";
-    if (await pathExists(this.dstPath)) {
+    if (await exists(this.dstPath)) {
       oldScript = await readFile(this.dstPath, "utf-8");
       if (!oldScript.includes(BANNER)) {
         if (this.options.force)
