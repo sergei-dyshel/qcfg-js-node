@@ -3,6 +3,7 @@ import type { LogLevel, LogRecord } from "./core";
 import { LogFormatter, type LogFormatterOptions, type LogFormatterType } from "./formatter";
 
 export interface LogHandlerType {
+  level?: LogLevel;
   handle: (record: LogRecord) => void;
 }
 
