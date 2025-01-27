@@ -27,6 +27,7 @@ export class Path {
   }
 }
 
+/** Like {@link p.join} but allows first segment to be undefined */
 export function pathJoin(initialPath?: string, ...paths: string[]) {
   if (initialPath) {
     return p.join(initialPath, ...paths);
@@ -47,4 +48,8 @@ export function stripExt(path: string) {
 export function basename(path: string, stripExt = false) {
   const parsed = p.parse(path);
   return stripExt ? parsed.name : parsed.base;
+}
+
+export function absPath(path: string) {
+  return p.resolve(path);
 }
