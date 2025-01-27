@@ -7,10 +7,11 @@ import {
   type IOType,
   type PromiseWithChild,
   type SpawnOptionsWithoutStdio,
+  type SpawnSyncOptions,
   type StdioOptions,
   type exec,
 } from "node:child_process";
-import { PassThrough, Readable, type Writable } from "node:stream";
+import { PassThrough, Stream, type Writable } from "node:stream";
 import * as consumers from "node:stream/consumers";
 import { LogLevel, RootLogger, type Logger } from "./logging";
 import { shlex } from "./shlex";
@@ -37,7 +38,9 @@ export interface RunLogOptions {
 export type Command = string | string[];
 
 export interface SubprocessRunOptions {
-  stdin?: IOType | Readable;
+  /** Similar to {@link SpawnSyncOptions.input}, pass this text to stdin. */
+  input?: string | Stream;
+  stdin?: IOType | Stream;
   stdout?: IOType | Writable;
   stderr?:
     | IOType
@@ -45,6 +48,8 @@ export interface SubprocessRunOptions {
     /** Redirect stderr to stdout */
     | "stdout";
 
+  allowedExitCodes?: number[];
+  /** Raise error if process exits with non-allowed exit code */
   check?: boolean;
   throwIfAborted?: boolean;
 }
@@ -96,7 +101,10 @@ export class RunResult {
   }
 
   check() {
-    if (this.signalCode != null || this.exitCode != 0) {
+    if (
+      this.signalCode != null ||
+      (this.exitCode !== null && !(this.options?.allowedExitCodes ?? [0]).includes(this.exitCode))
+    ) {
       this.options?.signal?.throwIfAborted();
       throw this.checkError();
     }
@@ -122,7 +130,7 @@ export class RunError extends Error {
 }
 
 function buildStdio(options?: RunOptions) {
-  const stdin = options?.stdin instanceof Readable ? "pipe" : options?.stdin ?? "inherit";
+  const stdin = options?.input ? "pipe" : options?.stdin ?? "inherit";
 
   const stdout = options?.stdout ?? "inherit";
 
@@ -158,9 +166,10 @@ export function run(command: Command, options?: RunOptions) {
   const signal = options?.signal;
   if (options?.check && options.throwIfAborted) signal?.throwIfAborted();
   const proc = spawn(command, options);
-  if (options?.stdin instanceof Readable) {
+  if (options?.input) {
     assertNotNull(proc.stdin);
-    options.stdin.pipe(proc.stdin);
+    if (options.input instanceof Stream) options.input.pipe(proc.stdin);
+    if (typeof options.input === "string") proc.stdin.end(options.input);
   }
 
   const procPromise = new Promise<void>((resolve, reject) => {
