@@ -41,6 +41,14 @@ export function booleanFlag(options?: Partial<BooleanFlag<boolean>>) {
 }
 
 /**
+ * Common flags used in many CLI tools. Some of flag fields are pre-filled (but overridable).
+ */
+export namespace CommonFlags {
+  export function force(options: Partial<BooleanFlag<boolean>>) {
+    return extendsFlagsInput({ force: booleanFlag({ char: "f", ...options }) });
+  }
+}
+/**
  * Provides basic machinery for writing Oclif commands. You should always subclass this class and
  * not {@link Command} directly.
  *
@@ -105,7 +113,10 @@ export abstract class BaseCommandWithVerbosity extends BaseCommand {
 
   protected declare flags: CommandFlags<typeof BaseCommandWithVerbosity>;
 
+  /** Log level when no verbose flags given. */
   protected verboseBaseLogLevel = LogLevel.WARNING;
+
+  /** Number of times --verbose/-v is specified. */
   protected verbosity = 0;
 
   /** Use to override logging configuration in subclasses */
