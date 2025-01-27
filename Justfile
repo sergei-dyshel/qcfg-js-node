@@ -17,4 +17,4 @@ build-build-cmd:
     tsx src/tools/build-cmd/main.ts src/tools/build-cmd/main.ts
 
 build: build-build-cmd
-    build-cmd src/tools/*
+    build-cmd src/tools/* src/cmd/*
