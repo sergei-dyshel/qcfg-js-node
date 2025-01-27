@@ -51,16 +51,20 @@ export function extend<S1 extends Schema, S2 extends Schema>(s1?: S1, s2?: S2): 
 }
 
 export function boolean(options?: BooleanOptions): Handler<boolean> {
-  return (name, value) => {
-    const prefix = options?.invert ? "no-" : "";
-    const val = value ?? options?.default ?? false;
-    const emitOnVal = options?.invert ?? false;
-    return val != emitOnVal ? [emitName(name, options, prefix)] : [];
-  };
+  return (name, value) => emitBool(name, value, options);
 }
 
 export function string(options?: CommonArgOptions): Handler<string> {
   return (name, value) => (value ? emitArg(name, value, options) : []);
+}
+
+export function booleanString(
+  options?: CommonArgOptions & BooleanOptions,
+): Handler<string | boolean> {
+  return (name, value) => {
+    if (typeof value === "string") return emitArg(name, value, options);
+    return emitBool(name, value, options);
+  };
 }
 
 export function number(options?: CommonArgOptions): Handler<number> {
@@ -86,9 +90,9 @@ export interface BooleanOptions extends CommonOptions {
    *   boolFlag: Cmd.boolean({ invert: true }),
    * });
    *
-   * Cmd.build(schema, { boolFlag: true }); // => []
-   * Cmd.build(schema, { boolFlag: false }); // => ["--no-bool-flag"]
-   * // false by default, unless default: true in options
+   * Cmd.build(schema, true); // => []
+   * Cmd.build(schema, false); // => ["--no-bool-flag"]
+   * // false by default, unless { default: true} in options
    * Cmd.build(schema, {}); // => ["--no-bool-flag"]
    * ```
    */
@@ -125,4 +129,11 @@ function emitName(name: string, options?: CommonOptions, prefix = ""): string {
 function emitArg(name: string, value: string, options?: CommonArgOptions): string[] {
   const emittedName = emitName(name, options);
   return options?.equals ? [`${emittedName}=${value}`] : [emittedName, value];
+}
+
+function emitBool(name: string, value?: boolean, options?: BooleanOptions) {
+  const prefix = options?.invert ? "no-" : "";
+  const val = value ?? options?.default ?? false;
+  const emitOnVal = options?.invert ?? false;
+  return val != emitOnVal ? [emitName(name, options, prefix)] : [];
 }
