@@ -1,3 +1,4 @@
+import { deepMerge } from "@sergei-dyshel/typescript/deep-merge";
 import { assertNotNull, fail } from "@sergei-dyshel/typescript/error";
 import type { WithRequired } from "@sergei-dyshel/typescript/types";
 import {
@@ -202,4 +203,21 @@ export function logRun(command: Command, options?: RunLogOptions) {
   const prefix = options.prefix ?? DEFAULT_LOG_PREFIX;
   const logLevel = options.logLevel ?? DEFAULT_LOG_LEVEL;
   logger.log(logLevel, prefix + joinCommand(command));
+}
+
+/**
+ * Abstracts running a command.
+ *
+ * Used by APIs like Git to allow running commands over SSH etc.
+ */
+export type Runner<Options = RunOptions> = (
+  command: Command,
+  options?: Options,
+) => Promise<RunResult>;
+
+/**
+ * Wraps {@link run} by adding default overridable run option.
+ */
+export function runner(options: RunOptions): Runner {
+  return async (command, opts) => run(command, deepMerge(options, opts));
 }
