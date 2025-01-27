@@ -14,12 +14,12 @@ import {
 export type List = Record<string, { push?: GitUrl; fetch?: GitUrl }>;
 
 /**
- * Git remote add <name> <url>
+ * `git remote add <name> <url>`
  *
  * https://git-scm.com/docs/git-remote#Documentation/git-remote.txt-emaddem
  */
 export async function add(name: string, url: string, options?: RunOptions) {
-  return runCommand(["remote", "add"], [name, url], {}, deepMerge(options, logByDefault));
+  return runCommand(["remote", "add"], [name, url], {}, deepMerge(logByDefault, options));
 }
 
 /**

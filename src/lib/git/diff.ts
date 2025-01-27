@@ -2,7 +2,7 @@ import { deepMerge } from "@sergei-dyshel/typescript/deep-merge";
 import { assert, assertNotNull } from "@sergei-dyshel/typescript/error";
 import type { ValueOf } from "@sergei-dyshel/typescript/types";
 import * as Cmd from "../cmdline-builder";
-import { ParseError, type RunOptions, runCommand, splitOutput, withOutErr } from "./common";
+import { ParseError, type RunOptions, runCommand, splitOutput, withOut } from "./common";
 
 export interface NumStat {
   insertions: number;
@@ -74,24 +74,59 @@ export type Result = Record<string, EntryWithStat>;
 
 export const HASH_LEN = 40;
 
+export interface Options {
+  /**
+   * Instead of showing the full 40-byte hexadecimal object name in diff-raw format output and
+   * diff-tree header lines, show the shortest prefix that is at least <n> hexdigits long that
+   * uniquely refers the object
+   */
+  abbrev?: number;
+
+  /** Generate diff in raw format. */
+  raw?: boolean;
+
+  /**
+   * Generate a diffstat. By default, as much space as necessary will be used for the filename part,
+   * and the rest for the graph part. Maximum width defaults to terminal width, or 80 columns if not
+   * connected to a terminal
+   */
+
+  stat?: boolean;
+  /**
+   * Similar to --stat, but shows number of added and deleted lines in decimal notation and pathname
+   * without abbreviation, to make it more machine friendly. For binary files, outputs two - instead
+   * of saying 0 0.
+   */
+  numstat?: boolean;
+
+  /** This form is to view the changes you staged for the next commit relative to the named <commit>. */
+  cached?: boolean;
+
+  color?: boolean | "always" | "never" | "auto";
+
+  /**
+   * When --raw, --numstat, --name-only or --name-status has been given, do not munge pathnames and
+   * use NULs as output field terminators.
+   */
+  nullTerminated?: boolean;
+}
+
 /**
  * Run `git diff`.
  *
  * Does not parses output. See:https://git-scm.com/docs/git-diff
  */
-export async function raw(
-  args: string | string[],
-  options?: Cmd.Data<typeof diffSchema> & {
-    nullTerminated?: boolean;
-  } & RunOptions,
-) {
+export async function raw(args: string | string[], options?: Options & RunOptions) {
   return runCommand("diff", typeof args === "string" ? [args] : args, diffSchema, options);
 }
 
 /** Like {@link raw} but parses output. */
-export async function parse(args: string | string[], options?: RunOptions) {
+export async function parse(
+  args: string | string[],
+  options?: Omit<Options, "nullTerminated" | "numstat" | "raw" | "abbrev"> & RunOptions,
+) {
   const result = await raw(args, {
-    ...deepMerge(options, withOutErr),
+    ...deepMerge(options, withOut),
     abbrev: HASH_LEN,
     raw: true,
     numstat: true,
@@ -201,5 +236,8 @@ function parseDiffOutput(origLines: string[]): Result {
 const diffSchema = Cmd.schema({
   abbrev: Cmd.number({ equals: true }),
   raw: Cmd.boolean(),
+  stat: Cmd.boolean(),
   numstat: Cmd.boolean(),
+  cached: Cmd.boolean(),
+  color: Cmd.booleanString({ equals: true }),
 });

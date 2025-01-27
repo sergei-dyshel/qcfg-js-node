@@ -6,6 +6,7 @@
  */
 import { deepMerge } from "@sergei-dyshel/typescript/deep-merge";
 import { LoggableError } from "@sergei-dyshel/typescript/error";
+import { extendsType } from "@sergei-dyshel/typescript/types";
 import * as Cmd from "../cmdline-builder";
 import { logByDefault, noCheck, runCommand, withOutErr, type RunOptions } from "./common";
 
@@ -23,26 +24,32 @@ export class Error extends LoggableError {}
  */
 export async function get<K extends keyof KnownKeys>(
   key: K,
-  options?: Options & { type?: undefined; check: true } & RunOptions,
+  options: Options & { type?: undefined; check: true } & RunOptions,
 ): Promise<ValueTypeToValue<KnownKeys[K]>>;
 export async function get<K extends keyof KnownKeys>(
   key: K,
   options?: Options & { type?: undefined; check?: undefined | boolean } & RunOptions,
 ): Promise<ValueTypeToValue<KnownKeys[K]> | undefined>;
 
-export async function get<T extends ValueType | undefined>(
-  key: string,
-  options?: Options & { type?: T; check: true } & RunOptions,
-): Promise<ValueTypeToValue<T>>;
-export async function get<T extends ValueType | undefined>(
-  key: string,
-  options?: Options & { type?: T; check?: undefined | boolean } & RunOptions,
-): Promise<ValueTypeToValue<T> | undefined>;
-
 export async function get(
   key: string,
   options?: OptionsWithType & { check?: boolean } & RunOptions,
-): Promise<Value | undefined> {
+) {
+  return getCustom(key, options);
+}
+
+export async function getCustom<T extends ValueType | undefined>(
+  key: string,
+  options: Options & { type?: T; check: true } & RunOptions,
+): Promise<ValueTypeToValue<T>>;
+export async function getCustom<T extends ValueType | undefined>(
+  key: string,
+  options?: Options & { type?: T; check?: undefined | boolean } & RunOptions,
+): Promise<ValueTypeToValue<T> | undefined>;
+export async function getCustom(
+  key: string,
+  options?: OptionsWithType & { check?: boolean } & RunOptions,
+) {
   const type = options?.type ?? (key in knownKeys ? knownKeys[key as keyof KnownKeys] : undefined);
   const result = await runCommand("config", ["--get", key], configSchema, {
     ...deepMerge(options, withOutErr, noCheck),
@@ -65,7 +72,8 @@ export async function get(
   }
 }
 
-const globalGet = get;
+const globalGetCustom = getCustom;
+const globalSetCustom = setCustom;
 
 /**
  * Git config --set
@@ -74,14 +82,21 @@ const globalGet = get;
  *   called to delete value.
  */
 
-export async function set<K extends string | keyof KnownKeys>(
+export async function set<K extends keyof KnownKeys>(
   key: K,
-  value: ValueTypeToValue<KeyToValueType<K>> | undefined,
+  value: ValueTypeToValue<KeyToValueType<K>>,
   options?: Options & RunOptions,
 ): Promise<void> {
-  if (value === undefined) return unset(key, options);
+  await setCustom(key, value, options);
+}
+
+export async function setCustom(
+  key: string,
+  value: Value,
+  options?: Options & RunOptions,
+): Promise<void> {
   await runCommand(["config"], [key, String(value)], configSchema, {
-    ...deepMerge(options, logByDefault, withOutErr),
+    ...deepMerge(logByDefault, withOutErr, options),
     type: valueType(value),
   });
 }
@@ -120,23 +135,21 @@ export namespace Remote {
     options?: Options & { type?: undefined; check?: undefined | boolean } & RunOptions,
   ): Promise<ValueTypeToValue<KnownRemoteKeys[K]> | undefined>;
 
-  export async function get<T extends ValueType | undefined>(
-    remote: string,
-    key: string,
-    options?: Options & { type?: T; check: true } & RunOptions,
-  ): Promise<ValueTypeToValue<T>>;
-  export async function get<T extends ValueType | undefined>(
-    remote: string,
-    key: string,
-    options?: Options & { type?: T; check?: undefined | boolean } & RunOptions,
-  ): Promise<ValueTypeToValue<T> | undefined>;
-
   export async function get(
     remote: string,
     key: string,
     options?: OptionsWithType & { check?: boolean } & RunOptions,
   ): Promise<Value | undefined> {
-    return globalGet(`remote.${remote}.${key}`, options);
+    return globalGetCustom(`remote.${remote}.${key}`, options);
+  }
+
+  export async function set<K extends keyof KnownRemoteKeys>(
+    remote: string,
+    key: K,
+    value: ValueTypeToValue<RemoteKeyToValueType<K>>,
+    options?: Options & RunOptions,
+  ): Promise<void> {
+    return globalSetCustom(`remote.${remote}.${key}`, value, options);
   }
 }
 
@@ -147,7 +160,9 @@ const configSchema = Cmd.schema({
 });
 
 type Options = Omit<Cmd.Data<typeof configSchema>, "type">;
-type ValueType = "bool" | "int" | "string";
+
+/** Possible value types for git config */
+export type ValueType = "bool" | "int" | "string";
 type OptionsWithType = Options & { type?: ValueType | undefined };
 
 /** Supported config types */
@@ -157,7 +172,9 @@ function valueType(value: Value) {
   return typeof value === "boolean" ? "bool" : typeof value === "number" ? "int" : undefined;
 }
 
-const knownKeys = {
+type KeyToValueTypeMap = Record<string, ValueType>;
+
+const knownKeys = extendsType<KeyToValueTypeMap>()({
   "user.name": "string",
   "user.email": "string",
 
@@ -170,17 +187,45 @@ const knownKeys = {
   "core.abbrev": "int",
 
   /**
+   * The path can be either absolute or relative. A relative path is taken as relative to the
+   * directory where the hooks are run (see {@link https://git-scm.com/docs/githooks}).
+   *
+   * See {@link https://git-scm.com/docs/git-config#Documentation/git-config.txt-corehooksPath}.
+   */
+  "core.hooksPath": "string",
+
+  /**
    * When set to true, automatically create a temporary stash entry before the operation begins, and
    * apply it after the operation ends.
    *
    * https://git-scm.com/docs/git-config/#Documentation/git-config.txt-rebaseautoStash
    */
   "rebase.autoStash": "bool",
-} as const;
+
+  /**
+   * If set to true or "refuse", git-receive-pack will deny a ref update to the currently checked
+   * out branch of a non-bare repository. Another option is "updateInstead" which will update the
+   * working tree if pushing into the current branch.
+   *
+   * https://git-scm.com/docs/git-config#Documentation/git-config.txt-receivedenyCurrentBranch
+   */
+  "receive.denyCurrentBranch": "string",
+
+  /**
+   * If set to true, .git/shallow can be updated when new refs require new shallow roots. Otherwise
+   * those refs are rejected.
+   */
+  "receive.shallowUpdate": "bool",
+});
 
 type KnownKeys = typeof knownKeys;
 
-type ValueTypeToValue<T extends ValueType | undefined> = T extends "bool"
+/**
+ * Conversion from {@link ValueType} to typescript type.
+ *
+ * Useful for writing wrappers for config functions.
+ */
+export type ValueTypeToValue<T extends ValueType | undefined> = T extends "bool"
   ? boolean
   : T extends "int"
     ? number
@@ -189,6 +234,9 @@ type ValueTypeToValue<T extends ValueType | undefined> = T extends "bool"
 type KeyToValueType<K extends string | keyof KnownKeys> = K extends keyof KnownKeys
   ? KnownKeys[K]
   : ValueType;
+
+type RemoteKeyToValueType<K extends string | keyof KnownRemoteKeys> =
+  K extends keyof KnownRemoteKeys ? KnownRemoteKeys[K] : ValueType;
 
 const knownRemoteKeys = {
   /**

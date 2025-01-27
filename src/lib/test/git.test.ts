@@ -88,18 +88,24 @@ void gitTest("getting and setting config (unknown key)", async (options) => {
   const boolVal = true;
 
   // key not defined
-  assertDeepEqual(await Git.Config.get(key, options), undefined);
-  await assertRejects(() => Git.Config.get(key, { check: true, ...options }), Git.Config.Error);
+  assertDeepEqual(await Git.Config.getCustom(key, options), undefined);
+  await assertRejects(
+    () => Git.Config.getCustom(key, { check: true, ...options }),
+    Git.Config.Error,
+  );
 
   // set key on local
-  await Git.Config.set(key, boolVal, options);
-  assertDeepEqual(await Git.Config.get(key, { ...options, type: "bool" }), boolVal);
+  await Git.Config.setCustom(key, boolVal, options);
+  assertDeepEqual(await Git.Config.getCustom(key, { ...options, type: "bool" }), boolVal);
   // global is still not set
-  assertDeepEqual(await Git.Config.get(key, { global: true, type: "bool", ...options }), undefined);
+  assertDeepEqual(
+    await Git.Config.getCustom(key, { global: true, type: "bool", ...options }),
+    undefined,
+  );
 
   // unset key on local
   await Git.Config.unset(key, options);
-  assertDeepEqual(await Git.Config.get(key, options), undefined);
+  assertDeepEqual(await Git.Config.getCustom(key, options), undefined);
 });
 
 void gitTest("getting and setting config (known key)", async (options) => {
