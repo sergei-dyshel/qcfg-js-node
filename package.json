@@ -60,7 +60,6 @@
     "resolve-package-path": "^4.0.3",
     "shlex": "^2.1.2",
     "source-map-support": "^0.5.21",
-    "tsx": "^4.7.0",
     "typanion": "^3.14.0",
     "which": "^5.0.0",
     "yargs": "^17.7.2"
