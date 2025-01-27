@@ -1,33 +1,56 @@
 import { deepMerge } from "@sergei-dyshel/typescript/deep-merge";
 import { LoggableError, assert } from "@sergei-dyshel/typescript/error";
+import { Subprocess } from "..";
 import * as Cmd from "../cmdline-builder";
-import type { RunFunc } from "../runner";
-import {
-  run as subprocessRun,
-  type Command,
-  type RunOptions as SubprocessRunOptions,
-} from "../subprocess";
+import type { Command, Runner } from "../subprocess";
 
 export class RunError extends LoggableError {}
 
 /** Error parsing git output */
 export class ParseError extends LoggableError {}
 
-export interface BaseOptions {
-  /** Directory in which to run git command */
+/**
+ * Git options common for all commands
+ *
+ * See {@link https://git-scm.com/docs/git}.
+ */
+export interface CommonOptions {
+  /**
+   * Do not pipe Git output into a pager.
+   */
+  noPager?: boolean;
+  /**
+   * Set the path to the repository (".git" directory)
+   *
+   * Interpreted relative to {@link RunOptions.cwd}.
+   * {@link https://git-scm.com/docs/git#Documentation/git.txt---git-dirltpathgt}
+   */
+  gitDir?: string;
+
+  /**
+   * Set the path to the working tree.
+   *
+   * Interpreted relative to {@link RunOptions.cwd}.
+   */
+  workTree?: string;
+}
+
+export type RunOptions = CommonOptions & {
+  /** Directory in which to run git command, passed to git as `git -C` */
   cwd?: string;
 
-  runFunc?: RunFunc;
-}
+  /** Path to git executable. By default use `git`. */
+  gitBin?: string;
 
-export interface RunOptions extends BaseOptions {
-  run?: SubprocessRunOptions;
-}
+  runner?: Runner;
+
+  run?: Subprocess.RunOptions;
+};
 
 export async function run(args: string[], options?: RunOptions) {
   try {
-    const runFunc = options?.runFunc ?? subprocessRun;
-    return await runFunc(["git", ...args], deepMerge(options?.run, { cwd: options?.cwd }));
+    const runner = options?.runner ?? Subprocess.run;
+    return await runner([options?.gitBin ?? "git", ...args], options?.run);
   } catch (err) {
     throw RunError.wrap(err, "Git command failed");
   }
@@ -36,26 +59,38 @@ export async function run(args: string[], options?: RunOptions) {
 /** Command schema with git options common for multiple commands. */
 const commonSchema = Cmd.schema({
   quiet: Cmd.boolean(),
+  verbose: Cmd.boolean(),
+  progress: Cmd.boolean(),
   porcelain: Cmd.boolean(),
   nullTerminated: Cmd.boolean({ custom: "-z" }),
   force: Cmd.boolean(),
+});
+
+/** Options that come before command in git command line */
+const preCmdSchema = Cmd.schema({
+  noPager: Cmd.boolean(),
+  gitDir: Cmd.string(),
+  workTree: Cmd.string(),
+  cwd: Cmd.string({ custom: "-C" }),
 });
 
 type GitCommandOptions = Cmd.Data<typeof commonSchema>;
 
 export async function runCommand<S extends Cmd.Schema>(
   command: Command,
-  args: string[],
-  commandSchema?: S,
+  args: string | string[] | undefined,
+  commandSchema: S,
   options?: Cmd.Data<S> & GitCommandOptions & RunOptions,
 ) {
+  const fixedArgs = typeof args === "string" ? [args] : args ?? [];
   return run(
     [
+      ...Cmd.build(preCmdSchema, options),
       ...(typeof command === "string" ? [command] : command),
       ...Cmd.build(Cmd.extend(commonSchema, commandSchema), options),
-      ...args,
+      ...fixedArgs,
     ],
-    options,
+    deepMerge<RunOptions>({ run: { check: true } }, options),
   );
 }
 
@@ -71,7 +106,7 @@ export function splitOutput(output: string, nullTerminated = false): string[] {
 }
 
 /** Modify run options to enable logging if not disabled in runner */
-export const logByDefault = { run: { log: { shouldLog: true } } } as const;
+export const logByDefault = { run: { log: { shouldLog: true } } } as RunOptions;
 
 export const withOut = {
   run: {
