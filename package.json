@@ -19,7 +19,6 @@
     "./path-tree": "./src/lib/path-tree.ts",
     "./subprocess": "./src/lib/subprocess.ts",
     "./git": "./src/lib/git/index.ts",
-    "./ssh": "./src/lib/ssh.ts",
     "./callsites": "./src/lib/callsites.ts",
     "./commander": "./src/lib/commander.ts",
     "./command-line": "./src/lib/command-line/index.ts",
@@ -73,7 +72,7 @@
     "@types/node": "^18.18.6",
     "@types/npmcli__package-json": "^4.0.4",
     "@types/proper-lockfile": "^4.1.2",
-"@types/semver": "^7.5.8",
+    "@types/semver": "^7.5.8",
     "@types/source-map-support": "^0.5.10",
     "@types/which": "^3.0.4",
     "@types/yargs": "^17.0.32"

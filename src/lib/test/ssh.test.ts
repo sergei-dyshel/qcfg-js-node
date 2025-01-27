@@ -10,16 +10,36 @@
  *       Login
  */
 
+import { assert } from "@sergei-dyshel/typescript/error";
 import { test } from "@sergei-dyshel/typescript/testing";
+import { writeFile } from "fs/promises";
+import { Ssh } from "..";
+import { withTempDirectory } from "../filesystem";
 import { configureLogging } from "../logging";
-import { SshRunner } from "../ssh";
+import { verifyFile } from "../testing";
 
 configureLogging();
 
-void test("basic", async () => {
-  const runner = new SshRunner("localhost", {
-    log: { shouldLog: true },
-    run: { log: { shouldLog: true } },
-  });
-  await runner.run("ls", { run: { check: true } });
-});
+const LOCALHOST = "localhost";
+
+void test("basic", async () =>
+  withTempDirectory(async (tempDir) => {
+    process.chdir(tempDir);
+    const ssh = new Ssh.Instance(LOCALHOST, {
+      cwd: tempDir,
+      log: { shouldLog: true, prefix: "[ssh] + " },
+      run: { log: { shouldLog: true }, check: true },
+    });
+
+    // write file and verify it shows in `ls` output
+    await writeFile("test.txt", "test");
+    const result = await ssh.run("ls", { run: { stdout: "pipe" } });
+    assert(result.stdout == "test.txt\n");
+
+    // read file remotely
+    assert((await ssh.readFile("test.txt")) == "test");
+
+    // write file remotely
+    await ssh.writeFile("test.txt", "test1", { mode: 0o755 });
+    await verifyFile("test.txt", "test1");
+  }));
