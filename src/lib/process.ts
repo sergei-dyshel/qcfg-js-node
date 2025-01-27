@@ -1,3 +1,4 @@
+import type { Awaitable } from "@sergei-dyshel/typescript/types";
 import { setTimeout as setTimeoutPromise } from "timers/promises";
 
 export namespace OnTerminate {
@@ -39,5 +40,20 @@ export namespace OnTerminate {
       if ((err as Error).name === "AbortError") check();
       throw err;
     }
+  }
+}
+
+/**
+ * Run function when chdir-ed into given directory.
+ *
+ * Guarantees that after running the function `cwd` won't be changed.
+ */
+export async function withChdir(dir: string, fn: () => Awaitable<void>) {
+  const cwd = process.cwd();
+  try {
+    process.chdir(dir);
+    await fn();
+  } finally {
+    process.chdir(cwd);
   }
 }
