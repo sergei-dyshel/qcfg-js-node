@@ -19,15 +19,22 @@ if (!canResolveLocalOrGlobal("typescript")) {
 
 import { Args, Command, CommandHelp, execute, Flags, Help, type Interfaces } from "@oclif/core";
 import { Hook, type Hooks } from "@oclif/core/hooks";
-import type { BooleanFlag, PJSON } from "@oclif/core/interfaces";
+import type { BooleanFlag, OclifConfiguration, PJSON } from "@oclif/core/interfaces";
 import * as PluginAutoComplete from "@sergei-dyshel/oclif-plugin-autocomplete-cjs";
-import { assert } from "@sergei-dyshel/typescript/error";
+import { assert, assertNotNull } from "@sergei-dyshel/typescript/error";
 import { DefaultMap } from "@sergei-dyshel/typescript/map";
 import { mapKeys } from "@sergei-dyshel/typescript/object";
 import { camelCase, kebabCase } from "@sergei-dyshel/typescript/string";
 import { canBeUndefined, extendsType } from "@sergei-dyshel/typescript/types";
 import "reflect-metadata";
-import { configureLogging, logError, type LogHandlerOptions, LogLevel, LogLevels } from "./logging";
+import {
+  configureLogging,
+  logError,
+  loggingConfigured,
+  type LogHandlerOptions,
+  LogLevel,
+  LogLevels,
+} from "./logging";
 import { basename } from "./path";
 
 export { Args, Command, Flags, Hook };
@@ -71,17 +78,30 @@ export namespace CommonFlags {
 export abstract class BaseCommand extends Command {
   static override baseFlags = {};
 
+  static override strict = false;
+  /**
+   * Indicates that this command is wrapper for another command.
+   *
+   * In this case flags and args will not be parsed and can be accessed as is via
+   * {@link Command.argv}.
+   */
+  protected wrapper = false;
+
   protected args!: CommandArgs<typeof BaseCommand>;
   protected flags!: CommandFlags<typeof BaseCommand>;
-  protected parsed_argv!: string[];
 
   public override async init(): Promise<void> {
     await super.init();
 
+    if (this.wrapper) {
+      assert(canBeUndefined(this.ctor.flags) === undefined, "Wrapper command can not have flags");
+      return;
+    }
+
     const toKebabCase = (key: string) => kebabCase(key);
     const toCamelCase = (key: string) => camelCase(key);
 
-    const { args, flags, argv } = await this.parse({
+    const { args, flags } = await this.parse({
       flags: mapKeys(canBeUndefined(this.ctor.flags) ?? {}, toKebabCase),
       baseFlags: mapKeys(
         canBeUndefined((super.ctor as typeof BaseCommand).baseFlags) ?? {},
@@ -93,7 +113,6 @@ export abstract class BaseCommand extends Command {
     });
     this.flags = mapKeys(flags, toCamelCase) as typeof this.flags;
     this.args = mapKeys(args, toCamelCase) as typeof this.args;
-    this.parsed_argv = argv as string[];
   }
 
   abstract override run(): Promise<void>;
@@ -105,11 +124,26 @@ export abstract class BaseCommand extends Command {
 export const extendsFlagsInput = extendsType<FlagsInput>();
 export const extendsArgsInput = extendsType<ArgsInput>();
 
-export const verbosityFlags = extendsFlagsInput({
+const verbosityFlags = extendsFlagsInput({
   verbose: Flags.boolean({
     char: "v",
     summary: "Verbosity level. Can be used multiple times.",
     default: false,
+  }),
+});
+
+/**
+ * To be used in wrapper commands to hide --verbose flag in usage.
+ *
+ * Usage:
+ *
+ * ```ts
+ * static override baseFlags = { hiddenVerbosityFlags };
+ * ```
+ */
+export const hiddenVerbosityFlags = extendsFlagsInput({
+  verbose: Flags.boolean({
+    hidden: true,
   }),
 });
 
@@ -130,15 +164,35 @@ export abstract class BaseCommandWithVerbosity extends BaseCommand {
   /** Use to override logging configuration in subclasses */
   protected logHandlerOptions: Omit<LogHandlerOptions, "level"> | undefined = {};
 
+  /**
+   * Parse verbosity flags.
+   *
+   * Should be used by wrapper commands (see {@link BaseCommand.wrapper}).
+   */
+  protected parseVerbosity(argv = this.argv) {
+    for (const arg of argv) {
+      if (arg === "--verbose") this.verbosity += 1;
+      if (/^-v+$/.test(arg)) this.verbosity += arg.length - 1;
+    }
+  }
+
+  protected configureLogging() {
+    configureLogging({
+      handler: {
+        ...this.logHandlerOptions,
+        level: LogLevels.addVerbosity(this.verboseBaseLogLevel, this.verbosity),
+      },
+    });
+  }
   /** Must call parent method when overriding */
   public override async init() {
     await super.init();
 
+    // wrapper commands would need to configure verbosity themselves
+    if (this.wrapper) return;
+
     if (this.flags.verbose) {
-      for (const arg of this.argv) {
-        if (arg === "--verbose") this.verbosity += 1;
-        if (/^-v+$/.test(arg)) this.verbosity += arg.length - 1;
-      }
+      this.parseVerbosity();
     }
 
     configureLogging({
@@ -150,6 +204,9 @@ export abstract class BaseCommandWithVerbosity extends BaseCommand {
   }
 
   protected override catch(err: Interfaces.CommandError) {
+    // If error happened before all arguments are parsed (e.g. wrong flags)
+    if (!loggingConfigured()) return super.catch(err);
+
     logError(err, {
       hideName: this.verbosity == 0,
       hideStack: this.verbosity == 0,
@@ -185,9 +242,16 @@ export function runCli(
   dirname: string,
   options?: {
     /** Default command to run when no arguments are given */
-    defaultCommand?: string;
+    defaultCommand?: string | typeof Command;
     /** Description help for CLI */
     description?: string;
+    topics?: OclifConfiguration["topics"];
+    /**
+     * Set development mode of Oclif.
+     *
+     * Particularly enables printing stacktraces when parsing errors occur.
+     */
+    development?: boolean;
   },
 ) {
   for (const autocompCmd of Object.values(PluginAutoComplete.commands)) {
@@ -212,17 +276,21 @@ export function runCli(
   let description = options?.description ?? "";
 
   if (options?.defaultCommand) {
+    const defaultCommand =
+      typeof options.defaultCommand === "string"
+        ? options.defaultCommand
+        : commandName(options.defaultCommand);
     assert(
-      options.defaultCommand in allOclifCommands,
-      `Command ${options.defaultCommand} not found in list or registered commands`,
+      defaultCommand in allOclifCommands,
+      `Command ${defaultCommand} not found in list or registered commands`,
     );
-    description += `\n\nIf not command or arguments given, will run "${options.defaultCommand}" command.`;
-    if (process.argv.length === 2) process.argv.push(options.defaultCommand);
+    description += `\n\nIf not command or arguments given, will run "${defaultCommand}" command.`;
+    if (process.argv.length === 2) process.argv.push(defaultCommand);
   }
 
   return execute({
     dir: dirname,
-    development: true,
+    development: options?.development,
     loadOptions: {
       root: dirname,
       pjson: {
@@ -231,6 +299,7 @@ export function runCli(
         oclif: {
           bin: binName,
           description,
+          topics: options?.topics,
           commands: {
             strategy: "explicit",
             target: filename,
@@ -261,16 +330,15 @@ export const allOclifCommands: Record<string, any> = {
  * Class decorator for adding Oclif command.
  */
 export function command(
-  name: string,
+  name: string | string[],
   options?: {
     /** Parent command name */
     parent?: typeof Command;
   },
 ) {
+  const joinedName = Array.isArray(name) ? name.join(":") : name;
   return (constructor: object) => {
-    const fullName = options?.parent
-      ? (Reflect.getMetadata("oclif:command-name", options.parent) as string) + ":" + name
-      : name;
+    const fullName = options?.parent ? commandName(options.parent) + ":" + joinedName : joinedName;
     Reflect.defineMetadata("oclif:command-name", fullName, constructor);
     allOclifCommands[fullName] = constructor;
   };
@@ -306,4 +374,10 @@ export class OclifHelp extends Help {
       this.opts,
     );
   }
+}
+
+function commandName(command: typeof Command) {
+  const name = Reflect.getMetadata("oclif:command-name", command) as string | undefined;
+  assertNotNull(name, `Command ${command.name} not decorated with with "@command"`);
+  return name;
 }

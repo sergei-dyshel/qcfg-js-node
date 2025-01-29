@@ -25,6 +25,10 @@ export function configureLogging(options?: LoggingOptions) {
   registerLogHandler(new LogHandler(options?.handler));
 }
 
+export function loggingConfigured() {
+  return handlers.length > 0;
+}
+
 export interface ErrorFormatOptions {
   /** Prefix error message with this string */
   prefix?: string;
