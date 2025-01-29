@@ -38,11 +38,11 @@ export async function get(
   return getCustom(key, options);
 }
 
-export async function getCustom<T extends ValueType | undefined>(
+export async function getCustom<T extends ValueType | undefined = undefined>(
   key: string,
   options: Options & { type?: T; check: true } & RunOptions,
 ): Promise<ValueTypeToValue<T>>;
-export async function getCustom<T extends ValueType | undefined>(
+export async function getCustom<T extends ValueType | undefined = undefined>(
   key: string,
   options?: Options & { type?: T; check?: undefined | boolean } & RunOptions,
 ): Promise<ValueTypeToValue<T> | undefined>;
@@ -101,10 +101,11 @@ export async function setCustom(
   });
 }
 
-export async function unset(
-  key: keyof KnownKeys | string,
-  options?: Omit<Options, "default"> & RunOptions,
-) {
+export async function unset(key: keyof KnownKeys, options?: Omit<Options, "default"> & RunOptions) {
+  return unsetCustom(key, options);
+}
+
+export async function unsetCustom(key: string, options?: Omit<Options, "default"> & RunOptions) {
   await runCommand(
     ["config"],
     ["--unset", key],

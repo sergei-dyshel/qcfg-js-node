@@ -2,7 +2,7 @@ import { deepMerge } from "@sergei-dyshel/typescript/deep-merge";
 import { LoggableError, assert } from "@sergei-dyshel/typescript/error";
 import { Subprocess } from "..";
 import * as Cmd from "../cmdline-builder";
-import type { Command, Runner } from "../subprocess";
+import { logRun, type Command, type RunLogOptions, type Runner } from "../subprocess";
 
 export class RunError extends LoggableError {}
 
@@ -45,9 +45,17 @@ export type RunOptions = CommonOptions & {
   runner?: Runner;
 
   run?: Subprocess.RunOptions;
+
+  /**
+   * Options for logging git command
+   *
+   * NOTE: these are unrelated to log options of underlying runner. Only git sub-command and
+   * following options are logged (i.e. --git-dir etc. are not logged).
+   */
+  log?: RunLogOptions;
 };
 
-export async function run(args: string[], options?: RunOptions) {
+export async function internalRun(args: string[], options?: RunOptions) {
   try {
     const runner = options?.runner ?? Subprocess.run;
     return await runner([options?.gitBin ?? "git", ...args], options?.run);
@@ -67,7 +75,7 @@ const commonSchema = Cmd.schema({
 });
 
 /** Options that come before command in git command line */
-const preCmdSchema = Cmd.schema({
+export const preCmdSchema = Cmd.schema({
   noPager: Cmd.boolean(),
   gitDir: Cmd.string(),
   workTree: Cmd.string(),
@@ -83,13 +91,14 @@ export async function runCommand<S extends Cmd.Schema>(
   options?: Cmd.Data<S> & GitCommandOptions & RunOptions,
 ) {
   const fixedArgs = typeof args === "string" ? [args] : args ?? [];
-  return run(
-    [
-      ...Cmd.build(preCmdSchema, options),
-      ...(typeof command === "string" ? [command] : command),
-      ...Cmd.build(Cmd.extend(commonSchema, commandSchema), options),
-      ...fixedArgs,
-    ],
+  const subCmd = [
+    ...(typeof command === "string" ? [command] : command),
+    ...Cmd.build(Cmd.extend(commonSchema, commandSchema), options),
+    ...fixedArgs,
+  ];
+  logRun(["git", ...subCmd], options?.log);
+  return internalRun(
+    [...Cmd.build(preCmdSchema, options), ...subCmd],
     deepMerge<RunOptions>({ run: { check: true } }, options),
   );
 }
@@ -105,8 +114,8 @@ export function splitOutput(output: string, nullTerminated = false): string[] {
   return lines;
 }
 
-/** Modify run options to enable logging if not disabled in runner */
-export const logByDefault = { run: { log: { shouldLog: true } } } as RunOptions;
+/** Enable logging by default in modifying commands */
+export const logByDefault = { log: { shouldLog: true } } as RunOptions;
 
 export const withOut = {
   run: {

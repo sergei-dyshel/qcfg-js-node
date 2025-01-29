@@ -7,6 +7,10 @@ type FieldType<T extends string> = T extends `${string}Date` ? Date : string;
 
 export type Entry = { [K in keyof typeof LOG_FORMAT]: FieldType<K> };
 
+export interface LogOptions {
+  maxCount?: number;
+}
+
 /**
  * `git log`
  *
@@ -15,23 +19,31 @@ export type Entry = { [K in keyof typeof LOG_FORMAT]: FieldType<K> };
  * This command only runs `git log` without parsing. For parsing use {@link parse}
  */
 export async function raw(
-  args: string | string[],
+  args?: string | string[],
   options?: {
     format?: string;
     date?: string;
     nullTerminated?: boolean;
-  } & RunOptions,
+  } & LogOptions &
+    RunOptions,
 ) {
   return runCommand(
     "log",
     typeof args === "string" ? [args] : args,
-    Cmd.schema({ format: Cmd.string({ equals: true }), date: Cmd.string({ equals: true }) }),
+    Cmd.schema({
+      format: Cmd.string({ equals: true }),
+      date: Cmd.string({ equals: true }),
+      maxCount: Cmd.number({ equals: true }),
+    }),
     options,
   );
 }
 
 /** Run {@link raw} and parse output. */
-export async function parse(args: string | string[], options?: RunOptions): Promise<Entry[]> {
+export async function parse(
+  args?: string | string[],
+  options?: LogOptions & RunOptions,
+): Promise<Entry[]> {
   const keys = Object.keys(LOG_FORMAT);
   const formatStr = Object.values(LOG_FORMAT).join("%x01");
   const output = (

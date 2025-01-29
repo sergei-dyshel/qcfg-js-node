@@ -104,7 +104,7 @@ void gitTest("getting and setting config (unknown key)", async (options) => {
   );
 
   // unset key on local
-  await Git.Config.unset(key, options);
+  await Git.Config.unsetCustom(key, options);
   assertDeepEqual(await Git.Config.getCustom(key, options), undefined);
 });
 

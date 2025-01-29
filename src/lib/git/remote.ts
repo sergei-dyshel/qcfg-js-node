@@ -32,6 +32,18 @@ export async function list(options?: RunOptions) {
   return parseGitRemoteVerbose(result.stdout!);
 }
 
+/**
+ * Rename remote.
+ */
+export async function rename(oldName: string, newName: string, options?: RunOptions) {
+  return runCommand(
+    ["remote", "rename", oldName, newName],
+    [],
+    {},
+    deepMerge(logByDefault, options),
+  );
+}
+
 function parseGitRemoteVerbose(output: string) {
   const result: List = {};
   const lines = splitOutput(output);

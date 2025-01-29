@@ -1,13 +1,15 @@
 import { deepMerge } from "@sergei-dyshel/typescript/deep-merge";
 import type { AnyFunction } from "@sergei-dyshel/typescript/types";
 import { join } from "node:path";
-import type { Subprocess } from "..";
+import { Subprocess } from "..";
 import * as Cmd from "../cmdline-builder";
 import { exists } from "../filesystem";
 import {
+  internalRun,
   logByDefault,
   noCheck,
   ParseError,
+  preCmdSchema,
   runCommand,
   splitOutput,
   withOut,
@@ -26,8 +28,13 @@ export const DEFAULT_GIT_DIR = ".git";
 // TODO: implement parsing for git status
 export type StatusEntry = string;
 
+export const HEAD = "HEAD";
+
 export class Instance {
   constructor(readonly options?: RunOptions) {}
+
+  run = this.wrap(run);
+  runTool = this.wrap(runTool);
 
   init = this.wrap(init);
   clone = this.wrap(clone);
@@ -47,11 +54,14 @@ export class Instance {
   version = this.wrap(version);
   show = this.wrap(show);
   push = this.wrap(push);
+  mergeBase = this.wrap(mergeBase);
+  inAncestor = this.wrap(isAncestor);
 
   getConfig = this.wrap(Config.get);
   getConfigCustom = this.wrap(Config.getCustom);
   setConfig = this.wrap(Config.set);
   setConfigCustom = this.wrap(Config.setCustom);
+  unsetConfigCustom = this.wrap(Config.unsetCustom);
   unsetConfig = this.wrap(Config.unset);
   setUser = this.wrap(Config.setUser);
   setConfigRemote = this.wrap(Config.Remote.set);
@@ -59,9 +69,13 @@ export class Instance {
 
   remoteAdd = this.wrap(Remote.add);
   remoteList = this.wrap(Remote.list);
+  remoteRename = this.wrap(Remote.rename);
 
   diffRaw = this.wrap(Diff.raw);
   diffParse = this.wrap(Diff.parse);
+
+  logRaw = this.wrap(Log.raw);
+  logParse = this.wrap(Log.parse);
 
   // REFACTOR: add rest of git commands
 
@@ -74,6 +88,31 @@ export class Instance {
       return fn(...args);
     }) as F;
   }
+}
+
+/**
+ * Run arbitrary git command.
+ *
+ * Args should start with git command, e.g. `["commit", "-m", "message"]` Common args are
+ * automatically prepended based on options.
+ */
+export async function run(args: string[], options?: RunOptions) {
+  return internalRun([...Cmd.build(preCmdSchema, options), ...args], options);
+}
+
+/**
+ * Run arbitrary git tool.
+ *
+ * Properly sets environment variables GIT_DIR and GIT_WORK_TREE based on options.
+ */
+export async function runTool(args: string[], options?: RunOptions) {
+  const env: NodeJS.ProcessEnv = {};
+
+  // See https://git-scm.com/book/ms/v2/Git-Internals-Environment-Variables
+  if (options?.workTree) env["GIT_WORK_TREE"] = options.workTree;
+  if (options?.gitDir) env["GIT_DIR"] = options.gitDir;
+  const runner = options?.runner ?? Subprocess.run;
+  return runner(args, deepMerge(options, { run: { env } }));
 }
 
 /**
@@ -196,6 +235,8 @@ export async function commit(
     all?: boolean;
     message?: string;
     allowEmpty?: boolean;
+    /** Replace the tip of the current branch by creating a new commit */
+    amend?: boolean;
     verbose?: boolean;
     quiet?: boolean;
   } & RunOptions,
@@ -203,7 +244,12 @@ export async function commit(
   return runCommand(
     "commit",
     [],
-    Cmd.schema({ message: Cmd.string(), allowEmpty: Cmd.boolean(), all: Cmd.boolean() }),
+    Cmd.schema({
+      message: Cmd.string(),
+      allowEmpty: Cmd.boolean(),
+      all: Cmd.boolean(),
+      amend: Cmd.boolean(),
+    }),
     deepMerge(logByDefault, options),
   );
 }
@@ -298,7 +344,7 @@ export async function revParse(args: string | string[], options?: RevParseOption
 }
 
 export async function revParseHead(options?: RunOptions) {
-  return revParse("HEAD", { ...options, check: true, verify: true, quiet: true });
+  return revParse(HEAD, { ...options, check: true, verify: true, quiet: true });
 }
 
 /**
@@ -438,6 +484,45 @@ export async function push(
     },
     deepMerge(logByDefault, options),
   );
+}
+
+/**
+ * `git merge-base`
+ *
+ * See {@link https://git-scm.com/docs/git-merge-base}.
+ */
+export async function mergeBase(
+  args: string[],
+  options?: {
+    /**
+     * Check if the first <commit> is an ancestor of the second <commit>, and exit with status 0 if
+     * true, or with status 1 if not. Errors are signaled by a non-zero status that is not 1.
+     */
+    isAncestor?: boolean;
+  } & RunOptions,
+) {
+  return runCommand(
+    "merge-base",
+    args,
+    Cmd.schema({ isAncestor: Cmd.boolean() }),
+    deepMerge<RunOptions>(withOut, options),
+  );
+}
+
+/**
+ * `git merge-base --is-ancestor`
+ *
+ * Returns if <commit1> is an ancestor of <commit2>.
+ *
+ * See
+ * {@link https://git-scm.com/docs/git-merge-base#Documentation/git-merge-base.txt---is-ancestor}.
+ */
+export async function isAncestor(commit1: string, commit2: string, options?: RunOptions) {
+  const result = await mergeBase(
+    [commit1, commit2],
+    deepMerge(options, { run: { allowedExitCodes: [0, 1] } }),
+  );
+  return result.exitCode === 0;
 }
 
 const branchSchema = Cmd.schema({
