@@ -9,6 +9,14 @@
  *   ```
  */
 
+import { canResolveLocalOrGlobal } from "./require";
+if (!canResolveLocalOrGlobal("typescript")) {
+  console.error(
+    'Oclif-based CLIs need "typescript" package to be installed globally.\nPlease run "npm install -g typescript"',
+  );
+  process.exit(1);
+}
+
 import { Args, Command, CommandHelp, execute, Flags, Help, type Interfaces } from "@oclif/core";
 import { Hook, type Hooks } from "@oclif/core/hooks";
 import type { BooleanFlag, PJSON } from "@oclif/core/interfaces";
