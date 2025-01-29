@@ -1,3 +1,4 @@
+import { assert } from "@sergei-dyshel/typescript/error";
 import { mkdir, writeFile } from "fs/promises";
 import { dirname } from "path";
 import { Git } from "../git";
@@ -54,6 +55,10 @@ function sygTest(name: string, fn: (_: Syg) => Promise<void>) {
     await syg.sync();
     await verifyFile(pathJoin(REMOTE_DIR, "a.txt"), "test3");
     await verifyFile(pathJoin(REMOTE_DIR, "b.txt"), "b");
+
+    await syg.renameRemote(REMOTE, "remote_renamed");
+    const updated = await syg.sync();
+    assert(!updated);
 
     await fn(syg);
   });

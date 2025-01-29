@@ -4,6 +4,7 @@
 import { assertNotNull, LoggableError } from "@sergei-dyshel/typescript/error";
 import { mapValuesAsync, objectEntries } from "@sergei-dyshel/typescript/object";
 import { dedent } from "@sergei-dyshel/typescript/string";
+import { canBeUndefined } from "@sergei-dyshel/typescript/types";
 import { createSymlink, mkdir, move, rm } from "fs-extra";
 import { readFile, readlink, unlink, writeFile } from "fs/promises";
 import { dirname, isAbsolute } from "path";
@@ -38,6 +39,9 @@ const SYG_GIT = ".syg.git";
 
 const BRANCH = "syg";
 
+/** Commit message used for commit with added files */
+const ADD_COMMIT_MSG = "+ syg";
+
 const logger = new ModuleLogger({ name: "syg" });
 
 export interface SygOptions {
@@ -51,10 +55,10 @@ export interface SygOptions {
 }
 
 export class Syg {
-  private readonly gitRunOptions: Git.RunOptions;
   private readonly sygGitPath: string;
-  private readonly sygGit: Git.Instance;
   private readonly git: Git.Instance;
+
+  readonly sygGit: Git.Instance;
 
   private cachedRemotes: Record<string, Syg.RemoteInfo> | undefined;
 
@@ -63,8 +67,11 @@ export class Syg {
     readonly gitVerbose: boolean,
   ) {
     this.sygGitPath = pathJoin(cwd, SYG_GIT);
-    this.gitRunOptions = { gitDir: this.sygGitPath, workTree: cwd ?? "." };
-    this.sygGit = new Git.Instance(this.gitRunOptions);
+    this.sygGit = new Git.Instance({
+      gitDir: this.sygGitPath,
+      workTree: cwd ?? ".",
+      log: { prefix: "+ [syg.git] " },
+    });
     this.git = new Git.Instance({
       gitDir: pathJoin(cwd, Git.DEFAULT_GIT_DIR),
       workTree: cwd ?? ".",
@@ -107,9 +114,10 @@ export class Syg {
   async addRemote(
     name: string,
     host: string,
-    directory: string,
+    directory?: string,
     options?: { setDefault?: boolean; setup?: boolean },
   ): Promise<Syg.RemoteInfo> {
+    if (!directory) directory = process.cwd();
     if (!isAbsolute(directory)) throw new Syg.Error("Remote directory must be absolute path");
     const url = `${host}:${directory}`;
     await this.sygGit.remoteAdd(name, url);
@@ -125,17 +133,23 @@ export class Syg {
     });
   }
 
-  async getRemotes(): Promise<Record<string, Syg.RemoteInfo>> {
+  /**
+   * Get mapping from remote name to {@link Syg.RemoteInfo}.
+   */
+  async getRemotes(options?: { noDefault?: boolean }): Promise<Record<string, Syg.RemoteInfo>> {
     const gitRemotes = await this.sygGit.remoteList();
+    const defaultRemote = options?.noDefault ? null : await this.getDefaultRemote();
     return mapValuesAsync(gitRemotes, async (remote, remoteInfo) => {
       assertNotNull(remoteInfo.fetch);
       const receivePack = await this.sygGit.getConfigRemote(remote, "receivepack", { local: true });
-      return {
+      const info: Syg.RemoteInfo = {
         name: remote,
         host: remoteInfo.fetch.protocol,
         directory: remoteInfo.fetch.pathname,
         gitBinDir: receivePack ? dirname(receivePack) : undefined,
-      } as Syg.RemoteInfo;
+      };
+      if (defaultRemote !== null) info.isDefault = remote === defaultRemote;
+      return info;
     });
   }
 
@@ -178,51 +192,96 @@ export class Syg {
   async getDefaultRemote(options?: { check?: false }): Promise<string | undefined>;
   async getDefaultRemote(options: { check: true }): Promise<string>;
   async getDefaultRemote(options?: { check?: boolean }) {
-    const remote = await this.sygGit.getConfigCustom(DEFAULT_REMOTE_KEY, { local: true });
+    let remote = await this.sygGit.getConfigCustom(DEFAULT_REMOTE_KEY, { local: true });
+    // getRemotes should not call recursively to itself via getDefaultRemote
+    const remotes = await this.getRemotes({ noDefault: true });
+    if (remote && !canBeUndefined(remotes[remote])) {
+      logger.error(`Default remote ${remote} is not a remote`);
+      await this.unsetDefaultRemote();
+      remote = undefined;
+    }
     if (options?.check && !remote) throw new Syg.NoDefaultRemote("Default remote is not set");
     return remote;
   }
 
-  async setDefaultRemote(remote: string) {
-    if ((await this.getDefaultRemote()) !== remote) {
+  async setDefaultRemote(remote: string, options?: { noCheck?: boolean }) {
+    if (!options?.noCheck && (await this.getDefaultRemote()) !== remote) {
       logger.info(`Setting default remote to ${remote}`);
     }
     await this.sygGit.setConfigCustom(DEFAULT_REMOTE_KEY, remote, { local: true });
     this.clearCachedRemotes();
   }
 
+  async unsetDefaultRemote() {
+    await this.sygGit.unsetConfigCustom(DEFAULT_REMOTE_KEY, { local: true });
+  }
+
+  /**
+   * Rename remote and preserve default flag
+   */
+  async renameRemote(oldName: string, newName: string) {
+    const old = await this.getRemote(oldName);
+    await this.sygGit.remoteRename(oldName, newName);
+    if (old.isDefault) {
+      await this.setDefaultRemote(newName, { noCheck: true });
+      logger.info(`Renamed DEFAULT remote "${oldName} to ${newName}"`);
+    } else {
+      logger.info(`Renamed remote "${oldName} to ${newName}"`);
+    }
+  }
+
+  /**
+   * Sychronize new changes to one or more remotes.
+   *
+   * Return if any of remotes were indeed updated.
+   */
   async sync(options?: {
     /** Remotes to sync. If not given will sync default remote. */
     remotes?: string[];
     /** Only sync these file paths/pathspecs. */
     pathspecs?: string[];
-  }) {
+  }): Promise<boolean> {
     // make syg comit history as local repo
-    const head = await this.git.revParseHead({ run: { log: { shouldLog: true } } });
+    const head = await this.git.revParseHead();
     logger.debug(`Local head: ${head}`);
     if (!(await this.sygGit.commitExists(head)))
       await this.sygGit.fetch([this.cwd ?? ".", head], { quiet: !this.gitVerbose });
-    await this.sygGit.reset(head, { quiet: !this.gitVerbose });
+
+    const log = await this.sygGit.logParse(undefined, { maxCount: 2 });
+    // syg head is "add commit" on top repo head, so we can just amend all changed files to it
+    let addCommit =
+      log[0].subject === ADD_COMMIT_MSG && log[1].hash === head ? log[0].hash : undefined;
+    if (addCommit) logger.debug(`"add commit" present`);
+
+    if (!addCommit) await this.sygGit.reset(head, { quiet: !this.gitVerbose });
 
     // prevent ignored files being added on git add
     await this.updateInfoExclude();
     await this.sygGit.add(options?.pathspecs, { all: true });
 
-    const diff = await this.sygGit.diffParse(head, { cached: true });
+    // check if there are staged files
+    const diff = await this.sygGit.diffParse(Git.HEAD, { cached: true });
     if (objectEntries(diff).length !== 0) {
-      logger.info("Worktree has changes since the last commit");
-      await this.sygGit.commit({ message: "+", quiet: !this.gitVerbose });
+      logger.debug("Worktree has changes since the last commit");
+      await this.sygGit.commit({
+        message: ADD_COMMIT_MSG,
+        quiet: !this.gitVerbose,
+        // ammend to "add commit"
+        amend: !!addCommit,
+      });
+      addCommit = await this.sygGit.revParseHead();
     }
 
+    let anyRemoteUpdated = false;
     const remotes = options?.remotes ?? [await this.getDefaultRemote({ check: true })];
     for (const remote of remotes) {
       logger.info(`Syncing ${remote}`);
-      const remoteBranch = await this.sygGit.revParse(`remotes/${remote}/${BRANCH}`, {
+      const remoteHead = await this.sygGit.revParse(`remotes/${remote}/${BRANCH}`, {
         verify: true,
         quiet: true,
       });
-      if (!remoteBranch) {
-        logger.info("First sync, fetching remote");
+      if (!remoteHead) {
+        logger.debug("First sync, fetching remote");
         await this.sygGit.fetch([remote, BRANCH], { quiet: !this.gitVerbose });
       }
       await this.sygGit.diffRaw(`${remote}/${BRANCH}`, {
@@ -230,13 +289,22 @@ export class Syg {
         cached: true,
         stat: true,
       });
+      if (addCommit === remoteHead) {
+        // if there are no changes on top of normal repo head, push anyway
+        logger.info("Remote is already up to date, not pushing");
+        continue;
+      }
+
       await this.sygGit.push(remote, {
         force: true,
         verify: false,
         quiet: !this.gitVerbose,
         verbose: this.gitVerbose,
       });
+      anyRemoteUpdated = true;
     }
+
+    return anyRemoteUpdated;
   }
 
   private async moveConfigOut() {
@@ -317,6 +385,7 @@ export namespace Syg {
     host: string;
     directory: string;
     gitBinDir?: string;
+    isDefault?: boolean;
   }
 }
 
