@@ -57,7 +57,7 @@ const argSpec = {
     type: cmd.boolean,
     long: "quiet",
     short: "q",
-    description: "Only log errors",
+    description: "Only log errors. Enabled by default with --run",
   }),
   run: cmd.flag({
     type: cmd.boolean,
@@ -153,9 +153,10 @@ const appCmd = cmd.command({
   description: "Build commands and tools using esbuild bundler",
   args: argSpec,
   handler: async (args) => {
+    const quiet = args.quiet || args.run;
     configureLogging({
       handler: {
-        level: args.quiet ? LogLevel.INFO : LogLevel.DEBUG,
+        level: quiet ? LogLevel.INFO : LogLevel.DEBUG,
       },
     });
     if (args.vscode_ext && args.vscode_mock)
