@@ -26,7 +26,7 @@ abstract class RootCommand extends BaseCommandWithVerbosity {
 
   public override async init() {
     await super.init();
-    this.syg = new Syg(undefined /* cwd */, this.verbosity >= 2);
+    this.syg = await Syg.detect({ gitVerbose: this.verbosity >= 2 });
   }
 }
 
@@ -109,14 +109,15 @@ export class RemoteSetupCommand extends RootCommand {
   static override args = extendsArgsInput({
     name: Args.string({
       description: "Remote name",
-      required: true,
     }),
   });
 
   protected declare args: CommandArgs<typeof RemoteSetupCommand>;
 
   override async run() {
-    await this.syg.setupRemote(this.args.name);
+    await this.syg.setupRemote(
+      this.args.name ?? (await this.syg.getDefaultRemote({ check: true })),
+    );
   }
 }
 

@@ -44,50 +44,63 @@ const ADD_COMMIT_MSG = "+ syg";
 
 const logger = new ModuleLogger({ name: "syg" });
 
-export interface SygOptions {
-  /** Override current directory */
-  cwd?: string;
-  /** Initialize syg in git root */
-  init?: boolean;
-  force?: boolean;
-  /** Verbose output of git commands */
-  gitVerbose?: boolean;
-}
-
 export class Syg {
-  private readonly sygGitPath: string;
-  private readonly git: Git.Instance;
+  readonly cwd?: string;
+  readonly root?: string;
 
+  /** Pass --verbose to all git commands */
+  readonly gitVerbose?: boolean;
+
+  // git instance for regular git repo
+  readonly git: Git.Instance;
+
+  // git instance for syg git repo
   readonly sygGit: Git.Instance;
+
+  readonly sygGitDir: string;
+  readonly gitDir: string;
 
   private cachedRemotes: Record<string, Syg.RemoteInfo> | undefined;
 
-  constructor(
-    readonly cwd: string | undefined,
-    readonly gitVerbose: boolean,
-  ) {
-    this.sygGitPath = pathJoin(cwd, SYG_GIT);
+  constructor(options?: Syg.Options) {
+    this.cwd = options?.cwd;
+    this.root = options?.root ?? options?.cwd;
+    this.gitVerbose = options?.gitVerbose;
+    this.sygGitDir = pathJoin(this.root, SYG_GIT);
     this.sygGit = new Git.Instance({
-      gitDir: this.sygGitPath,
-      workTree: cwd ?? ".",
+      gitDir: this.sygGitDir,
+      workTree: this.root ?? ".",
       log: { prefix: "+ [syg.git] " },
     });
+    this.gitDir = pathJoin(this.root, Git.DEFAULT_GIT_DIR);
     this.git = new Git.Instance({
-      gitDir: pathJoin(cwd, Git.DEFAULT_GIT_DIR),
-      workTree: cwd ?? ".",
+      gitDir: this.gitDir,
+      workTree: this.root ?? ".",
     });
+  }
+
+  /**
+   * Find syg root directory in current or parent directories of {@link Syg.BaseOptions.cwd}.
+   *
+   * Throw error if not found.
+   */
+  static async detect(options?: Syg.BaseOptions): Promise<Syg> {
+    const root = await Git.RevParse.showToplevel({ cwd: options?.cwd });
+    const syg = new Syg({ ...options, root });
+    await syg.checkSygGitDir();
+    return syg;
   }
 
   async init(options?: {
     /** Force initialize (if init = true) */
     force?: boolean;
   }) {
-    if (!(await Git.isRepoRoot({ cwd: this.cwd }))) throw new Syg.Error("Not in  git repository");
-    let sygGitExists = await exists(this.sygGitPath);
+    await this.checkGitDir();
+    let sygGitExists = await exists(this.sygGitDir);
     if (options?.force) {
       if (sygGitExists) {
         logger.debug("Removing existing syg git dir");
-        await rm(this.sygGitPath, { recursive: true });
+        await rm(this.sygGitDir, { recursive: true });
         sygGitExists = false;
       }
     }
@@ -107,7 +120,7 @@ export class Syg {
         verbose: this.gitVerbose,
       });
     }
-    await mkdir(pathJoin(this.sygGitPath, "info"), { recursive: true });
+    await mkdir(pathJoin(this.sygGitDir, "info"), { recursive: true });
     await this.moveConfigOut();
   }
 
@@ -245,7 +258,7 @@ export class Syg {
     const head = await this.git.revParseHead();
     logger.debug(`Local head: ${head}`);
     if (!(await this.sygGit.commitExists(head)))
-      await this.sygGit.fetch([this.cwd ?? ".", head], { quiet: !this.gitVerbose });
+      await this.sygGit.fetch([this.root ?? ".", head], { quiet: !this.gitVerbose });
 
     const log = await this.sygGit.logParse(undefined, { maxCount: 2 });
     // syg head is "add commit" on top repo head, so we can just amend all changed files to it
@@ -308,11 +321,11 @@ export class Syg {
   }
 
   private async moveConfigOut() {
-    const insidePath = pathJoin(this.sygGitPath, "config");
-    const outsidePath = pathJoin(this.cwd, CONFIG_FILE);
+    const insidePath = pathJoin(this.sygGitDir, "config");
+    const outsidePath = pathJoin(this.root, CONFIG_FILE);
     if (await isSymbolicLink(insidePath)) {
       logger.debug(`${insidePath} is already a symlink`);
-      const linkTarget = absPath(pathJoin(this.sygGitPath, await readlink(insidePath)));
+      const linkTarget = absPath(pathJoin(this.sygGitDir, await readlink(insidePath)));
       if (linkTarget !== absPath(outsidePath))
         throw new Syg.InternalError(
           `${insidePath} is symlink to ${linkTarget} and not to ${outsidePath}`,
@@ -330,15 +343,15 @@ export class Syg {
   }
 
   private async updateInfoExclude() {
-    const excludePath = pathJoin(this.sygGitPath, "info", "exclude");
-    const ignorePath = pathJoin(this.cwd, IGNORE_FILE);
+    const excludePath = pathJoin(this.sygGitDir, "info", "exclude");
+    const ignorePath = pathJoin(this.root, IGNORE_FILE);
     let newContent = dedent`
       /${SYG_GIT}
       /${IGNORE_FILE}
       /${CONFIG_FILE}
     `;
     if (await exists(ignorePath)) {
-      const ignorePatterns = await readFile(pathJoin(this.cwd, IGNORE_FILE), "utf8");
+      const ignorePatterns = await readFile(pathJoin(this.root, IGNORE_FILE), "utf8");
       newContent += ignorePatterns;
     }
     await writeFile(excludePath, newContent);
@@ -373,12 +386,43 @@ export class Syg {
   private clearCachedRemotes() {
     this.cachedRemotes = undefined;
   }
+
+  private async checkGitDir() {
+    try {
+      await Git.RevParse.resolveGitDir(this.gitDir);
+    } catch (err) {
+      if (err instanceof Git.Error.NotAGitDir)
+        throw Syg.Error.wrap(err, `No git dir at ${this.gitDir}`);
+      throw Syg.Error.wrap(err, "Not in  git repository");
+    }
+  }
+
+  /**
+   * Check if syg git dir exists and is a valid git dir.
+   *
+   * This function is not called internally for speed purposes.
+   */
+  async checkSygGitDir() {
+    try {
+      await Git.RevParse.resolveGitDir(this.sygGitDir);
+    } catch (err) {
+      if (err instanceof Git.Error.NotAGitDir)
+        throw Syg.Error.wrap(err, `Not syg dir at ${this.sygGitDir}`);
+      throw Syg.Error.wrap(err, "Not in  git repository");
+    }
+  }
 }
 
 export namespace Syg {
-  export class Error extends LoggableError {}
-  export class InternalError extends Error {}
-  export class NoDefaultRemote extends Error {}
+  export class Error extends LoggableError {
+    protected static override namePrefix = "Syg.";
+  }
+  export class InternalError extends Error {
+    protected static override namePrefix = "Syg.";
+  }
+  export class NoDefaultRemote extends Error {
+    protected static override namePrefix = "Syg.";
+  }
 
   export interface RemoteInfo {
     name: string;
@@ -386,6 +430,27 @@ export namespace Syg {
     directory: string;
     gitBinDir?: string;
     isDefault?: boolean;
+  }
+
+  export interface BaseOptions {
+    /**
+     * Override current directory.
+     *
+     * Passed to all git commands as `-C`.
+     */
+    cwd?: string;
+    /** Verbose output of git commands */
+    gitVerbose?: boolean;
+  }
+
+  export interface Options extends BaseOptions {
+    /**
+     * Work tree root. Must contain `.git` directory.
+     *
+     * Syg git directory will be created also in this directory. If missing, use
+     * {@link Syg.Options.cwd}.
+     */
+    root?: string;
   }
 }
 

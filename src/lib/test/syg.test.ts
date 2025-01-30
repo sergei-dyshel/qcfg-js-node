@@ -32,9 +32,10 @@ function sygTest(name: string, fn: (_: Syg) => Promise<void>) {
     // omitting cwd because clone must run in parent dir
     await Git.clone(REMOTE_DIR, { directory: localDir, run: { log: { logger } } });
     const gitVerbose = getLogHandlers()[0].level === LogLevel.DEBUG;
-    const syg = new Syg(localDir, gitVerbose);
+    const syg = new Syg({ root: localDir, gitVerbose });
 
     await syg.init();
+    await syg.checkSygGitDir();
     await syg.addRemote(REMOTE, "localhost", absPath(REMOTE_DIR), { setDefault: true });
     const gitBinDir = dirname(await which("git"));
     await syg.setRemoteGitBinDir(REMOTE, gitBinDir);
