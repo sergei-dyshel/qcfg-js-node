@@ -1,14 +1,15 @@
 import { deepMerge } from "@sergei-dyshel/typescript/deep-merge";
 import type { AnyFunction } from "@sergei-dyshel/typescript/types";
-import { join } from "node:path";
 import { Subprocess } from "..";
 import * as Cmd from "../cmdline-builder";
 import { exists } from "../filesystem";
+import { pathJoin } from "../path";
 import {
+  Error,
+  HEAD,
   internalRun,
   logByDefault,
   noCheck,
-  ParseError,
   preCmdSchema,
   runCommand,
   splitOutput,
@@ -20,15 +21,14 @@ import * as Config from "./config";
 import * as Diff from "./diff";
 import * as Log from "./log";
 import * as Remote from "./remote";
+import * as RevParse from "./rev-parse";
 
-export { Config, Diff, Log, Remote, type RunOptions };
+export { Config, Diff, Error, HEAD, Log, Remote, RevParse, type RunOptions };
 
 export const DEFAULT_GIT_DIR = ".git";
 
 // TODO: implement parsing for git status
 export type StatusEntry = string;
-
-export const HEAD = "HEAD";
 
 export class Instance {
   constructor(readonly options?: RunOptions) {}
@@ -44,8 +44,6 @@ export class Instance {
   branchList = this.wrap(branchList);
   commitExists = this.wrap(commitExists);
   commitExistsOnRemote = this.wrap(commitExistsOnRemote);
-  revParse = this.wrap(revParse);
-  revParseHead = this.wrap(revParseHead);
   checkout = this.wrap(checkout);
   getBlob = this.wrap(getBlob);
   fetch = this.wrap(fetch);
@@ -56,6 +54,12 @@ export class Instance {
   push = this.wrap(push);
   mergeBase = this.wrap(mergeBase);
   inAncestor = this.wrap(isAncestor);
+
+  revParseRaw = this.wrap(RevParse.raw);
+  revParse = this.wrap(RevParse.hash);
+  revParseHead = this.wrap(RevParse.head);
+  showToplevel = this.wrap(RevParse.showToplevel);
+  resolveGitDir = this.wrap(RevParse.resolveGitDir);
 
   getConfig = this.wrap(Config.get);
   getConfigCustom = this.wrap(Config.getCustom);
@@ -122,8 +126,8 @@ export async function runTool(args: string[], options?: RunOptions) {
  *
  * FIXME: Does not use runner, so only can be used for local paths
  */
-export async function isRepoRoot(options?: RunOptions) {
-  return exists(join(options?.cwd ?? ".", ".git"));
+export async function isRepoRoot(options?: RunOptions & { gitDirName?: string }) {
+  return exists(pathJoin(options?.cwd, options?.gitDirName ?? ".git"));
 }
 
 /**
@@ -297,56 +301,6 @@ export async function commitExistsOnRemote(commit: string, options?: RunOptions)
   return branches.length > 0;
 }
 
-interface RevParseOptions {
-  /**
-   * If true raise exception if invalid object name is provided, otherwise just return undefined.
-   */
-  check?: boolean;
-  /**
-   * Verify that exactly one parameter is provided, and that it can be turned into a raw 20-byte
-   * SHA-1 that can be used to access the object database. If so, emit it to the standard output;
-   * otherwise, error out.
-   */
-  verify?: boolean;
-  /**
-   * Only meaningful in --verify mode. Do not output an error message if the first argument is not a
-   * valid object name; instead exit with non-zero status silently. SHA-1s for valid object names
-   * are printed to stdout on success.
-   */
-  quiet?: boolean;
-}
-
-/**
- * Git rev-parse
- *
- * See {@link https://git-scm.com/docs/git-rev-parse}.
- */
-export async function revParse(
-  args: string | string[],
-  options: RevParseOptions & { check: true } & RunOptions,
-): Promise<string>;
-export async function revParse(
-  args: string | string[],
-  options?: RevParseOptions & { check?: boolean | undefined } & RunOptions,
-): Promise<string | undefined>;
-export async function revParse(args: string | string[], options?: RevParseOptions & RunOptions) {
-  const runOptions: Subprocess.RunOptions = options?.check
-    ? { check: true }
-    : { check: true, allowedExitCodes: [0, 1] };
-  const result = await runCommand(
-    "rev-parse",
-    typeof args === "string" ? [args] : args,
-    { verify: Cmd.boolean() },
-    deepMerge(options, withOut, { run: runOptions }),
-  );
-  if (result.exitCode === 1) return undefined;
-  return result.stdout!.trimEnd();
-}
-
-export async function revParseHead(options?: RunOptions) {
-  return revParse(HEAD, { ...options, check: true, verify: true, quiet: true });
-}
-
 /**
  * `git checkout`
  *
@@ -439,7 +393,7 @@ export async function version(options?: RunOptions) {
   );
   const verStr = result.stdout!.trimEnd();
   const match = verStr.match(/^git version ((\d+)\.(\d+)\.(\d+))/);
-  if (!match) throw new ParseError("Failed to parse git version output: " + verStr);
+  if (!match) throw new Error.Parse("Failed to parse git version output: " + verStr);
   return match[1];
 }
 

@@ -5,13 +5,21 @@
  *   See: https://git-scm.com/docs/git-config
  */
 import { deepMerge } from "@sergei-dyshel/typescript/deep-merge";
-import { LoggableError } from "@sergei-dyshel/typescript/error";
 import { extendsType } from "@sergei-dyshel/typescript/types";
 import * as Cmd from "../cmdline-builder";
-import { logByDefault, noCheck, runCommand, withOutErr, type RunOptions } from "./common";
+import {
+  Error as CommonError,
+  logByDefault,
+  noCheck,
+  runCommand,
+  withOutErr,
+  type RunOptions,
+} from "./common";
 
 /** Errors related to git config invocations */
-export class Error extends LoggableError {}
+export class Error extends CommonError {
+  protected static override namePrefix = "Git.Config.";
+}
 
 /**
  * `git config --get`

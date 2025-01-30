@@ -2,7 +2,7 @@ import { deepMerge } from "@sergei-dyshel/typescript/deep-merge";
 import { assert, assertNotNull } from "@sergei-dyshel/typescript/error";
 import type { ValueOf } from "@sergei-dyshel/typescript/types";
 import * as Cmd from "../cmdline-builder";
-import { ParseError, type RunOptions, runCommand, splitOutput, withOut } from "./common";
+import { Error, type RunOptions, runCommand, splitOutput, withOut } from "./common";
 
 export interface NumStat {
   insertions: number;
@@ -136,7 +136,7 @@ export async function parse(
   try {
     return parseDiffOutput(lines);
   } catch (err) {
-    throw ParseError.wrap(err, "Failed to parse git diff output", result.stdout!);
+    throw Error.Parse.wrap(err, "Failed to parse git diff output", result.stdout!);
   }
 }
 

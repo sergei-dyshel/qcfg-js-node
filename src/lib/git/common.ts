@@ -4,17 +4,50 @@ import { Subprocess } from "..";
 import * as Cmd from "../cmdline-builder";
 import { logRun, type Command, type RunLogOptions, type Runner } from "../subprocess";
 
-export class RunError extends LoggableError {}
+/** Base class for all errors */
+export class Error extends LoggableError {
+  protected static override namePrefix = "Git.";
+}
 
-/** Error parsing git output */
-export class ParseError extends LoggableError {}
+export namespace Error {
+  /** Error originated from failure of git command but not recognized specifically */
+  export class Other extends Error {
+    protected static override namePrefix = "Git.Error.";
+  }
+
+  /** Errors when parsing git command output by functions in this module */
+  export class Parse extends Error {
+    protected static override namePrefix = "Git.Error.";
+  }
+
+  export class NotAGitRepo extends Error {
+    protected static override namePrefix = "Git.Error.";
+  }
+
+  export class NotAGitDir extends Error {
+    protected static override namePrefix = "Git.Error.";
+  }
+}
 
 /**
  * Git options common for all commands
  *
  * See {@link https://git-scm.com/docs/git}.
  */
+/**
+ * Options common to all git commands.
+ *
+ * Passed to `git` comman line as argument preceeing subcommand, e.g.
+ *
+ *     git -C <cwd> <subcommand> <args>
+ */
 export interface CommonOptions {
+  /**
+   * Directory in which to run git command, passed to git as `git -C`
+   *
+   * All paths and pathspecs passed to git are relative to this directory.
+   */
+  cwd?: string;
   /**
    * Do not pipe Git output into a pager.
    */
@@ -35,10 +68,13 @@ export interface CommonOptions {
   workTree?: string;
 }
 
+/**
+ * Options for running git command.
+ *
+ * Beside common flags for git command {@link CommonOptions} has options determining how to run git
+ * dubprocess.
+ */
 export type RunOptions = CommonOptions & {
-  /** Directory in which to run git command, passed to git as `git -C` */
-  cwd?: string;
-
   /** Path to git executable. By default use `git`. */
   gitBin?: string;
 
@@ -60,7 +96,9 @@ export async function internalRun(args: string[], options?: RunOptions) {
     const runner = options?.runner ?? Subprocess.run;
     return await runner([options?.gitBin ?? "git", ...args], options?.run);
   } catch (err) {
-    throw RunError.wrap(err, "Git command failed");
+    // wrap all errors other than throwed by this module
+    if (err instanceof Error) throw err;
+    throw Error.Other.wrap(err, "Git command failed");
   }
 }
 
@@ -135,3 +173,4 @@ export const noCheck = {
     check: false,
   },
 } as const;
+export const HEAD = "HEAD";

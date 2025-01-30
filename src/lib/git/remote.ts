@@ -3,7 +3,7 @@
 import { deepMerge } from "@sergei-dyshel/typescript/deep-merge";
 import gitUrlParse, { type GitUrl } from "git-url-parse";
 import {
-  ParseError,
+  Error,
   logByDefault,
   runCommand,
   splitOutput,
@@ -49,7 +49,7 @@ function parseGitRemoteVerbose(output: string) {
   const lines = splitOutput(output);
   for (const line of lines) {
     const match = /^(\S+)\s+(\S+)\s+\((\S+)\)/.exec(line);
-    if (!match) throw new ParseError("Failed to parse git remote output line: " + line);
+    if (!match) throw new Error.Parse("Failed to parse git remote output line: " + line);
     const [_, name, uriStr, type] = match;
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (!result[name]) result[name] = {};
@@ -57,7 +57,7 @@ function parseGitRemoteVerbose(output: string) {
     try {
       uri = gitUrlParse(uriStr);
     } catch (err) {
-      throw new ParseError("Failed to parse git remote URI: " + uriStr, { cause: err });
+      throw new Error.Parse("Failed to parse git remote URI: " + uriStr, { cause: err });
     }
     switch (type) {
       case "push":
@@ -67,7 +67,7 @@ function parseGitRemoteVerbose(output: string) {
         result[name].fetch = uri;
         continue;
     }
-    throw new ParseError("Unknown git remote type: " + type);
+    throw new Error.Parse("Unknown git remote type: " + type);
   }
   return result;
 }
