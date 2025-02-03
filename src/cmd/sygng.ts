@@ -1,42 +1,50 @@
 import { dedent } from "@sergei-dyshel/typescript/string";
+import { userConfig } from "../lib/config";
 import { RootLogger } from "../lib/logging";
 import {
   allOclifCommands,
   Args,
+  argsInput,
   BaseCommandWithVerbosity,
-  booleanFlag,
   command,
   CommandArgs,
   CommandFlags,
-  CommonFlags,
-  extendsArgsInput,
-  extendsFlagsInput,
+  exactlyOne,
   Flags,
-  hiddenVerbosityFlags,
+  flagsInput,
+  mutuallyExclusive,
   OclifHelp,
   runCli,
+  wrappedCommandArgs,
 } from "../lib/oclif";
 import { Syg } from "../lib/syg";
 export { allOclifCommands, OclifHelp };
 
 const logger = RootLogger.get();
 
-abstract class RootCommand extends BaseCommandWithVerbosity {
+abstract class RootCommand<
+  T extends typeof BaseCommandWithVerbosity,
+> extends BaseCommandWithVerbosity {
+  protected declare flags: CommandFlags<T>;
+  protected declare args: CommandArgs<T>;
   syg!: Syg;
+  protected shouldDetect = true;
 
   public override async init() {
     await super.init();
-    this.syg = await Syg.detect({ gitVerbose: this.verbosity >= 2 });
+    if (this.shouldDetect)
+      this.syg = await Syg.detect({ gitVerbose: (this.flags.verbose ?? 0) >= 2 });
+    else this.syg = new Syg();
   }
 }
 
 @command("init")
-export class InitCommand extends RootCommand {
+export class InitCommand extends RootCommand<typeof InitCommand> {
   static override summary = "Init syg in current directory";
-  static override flags = extendsFlagsInput({
-    ...CommonFlags.force({ summary: "Recreate syg dir" }),
+  static override flags = flagsInput({
+    ...Flags.force({ summary: "Recreate syg dir" }),
   });
-  protected declare flags: CommandFlags<typeof InitCommand>;
+  protected override shouldDetect = false;
 
   override async run() {
     await this.syg.init({ force: this.flags.force });
@@ -44,58 +52,57 @@ export class InitCommand extends RootCommand {
 }
 
 @command(["remote", "add"])
-export class RemoteAddCommand extends RootCommand {
+export class RemoteAddCommand extends RootCommand<typeof RemoteAddCommand> {
   static override summary = "Add remote";
   static override description = "Add remote, optionally set it as default ans setup";
 
-  static override flags = extendsFlagsInput({
-    setDefault: booleanFlag({
+  static override flags = flagsInput({
+    setDefault: Flags.boolean({
       char: "d",
       summary: "Set remote as default",
     }),
-    setup: booleanFlag({
+    setup: Flags.boolean({
       char: "s",
       summary: "Setup remote",
     }),
   });
 
-  static override args = extendsArgsInput({
+  static override args = argsInput({
     name: Args.string({
       description: "Remote name",
       required: true,
     }),
     host: Args.string({
       description: "Remote hostname",
-      required: true,
     }),
     directory: Args.string({
       description: "Remote directory. If empty, use current directory",
     }),
   });
 
-  protected declare flags: CommandFlags<typeof RemoteAddCommand>;
-  protected declare args: CommandArgs<typeof RemoteAddCommand>;
-
   override async run() {
-    await this.syg.addRemote(this.args.name, this.args.host, this.args.directory, {
-      setDefault: this.flags.setDefault,
-      setup: this.flags.setup,
-    });
+    await this.syg.addRemote(
+      this.args.name,
+      this.args.host ?? this.args.name,
+      this.args.directory,
+      {
+        setDefault: this.flags.setDefault,
+        setup: this.flags.setup,
+      },
+    );
   }
 }
 
 @command(["remote", "set-default"])
-export class RemoteSetDefaultCommand extends RootCommand {
+export class RemoteSetDefaultCommand extends RootCommand<typeof RemoteSetDefaultCommand> {
   static override summary = "Set remote as default";
 
-  static override args = extendsArgsInput({
+  static override args = argsInput({
     name: Args.string({
       description: "Remote name",
       required: true,
     }),
   });
-
-  protected declare args: CommandArgs<typeof RemoteSetDefaultCommand>;
 
   override async run() {
     await this.syg.setDefaultRemote(this.args.name);
@@ -103,16 +110,14 @@ export class RemoteSetDefaultCommand extends RootCommand {
 }
 
 @command(["remote", "setup"])
-export class RemoteSetupCommand extends RootCommand {
+export class RemoteSetupCommand extends RootCommand<typeof RemoteSetupCommand> {
   static override summary = "Setup remote";
 
-  static override args = extendsArgsInput({
+  static override args = argsInput({
     name: Args.string({
       description: "Remote name",
     }),
   });
-
-  protected declare args: CommandArgs<typeof RemoteSetupCommand>;
 
   override async run() {
     await this.syg.setupRemote(
@@ -122,7 +127,7 @@ export class RemoteSetupCommand extends RootCommand {
 }
 
 @command(["remote", "list"])
-export class RemoteListCommand extends RootCommand {
+export class RemoteListCommand extends RootCommand<typeof RemoteListCommand> {
   static override summary = "List remotes";
   static override aliases = ["remote:ls"];
 
@@ -138,11 +143,11 @@ export class RemoteListCommand extends RootCommand {
 }
 
 @command(["remote", "rename"])
-export class RemoteRenameCommand extends RootCommand {
+export class RemoteRenameCommand extends RootCommand<typeof RemoteRenameCommand> {
   static override summary = "Rename remote";
   static override description = "Rename remote and preserve default flag";
 
-  static override args = extendsArgsInput({
+  static override args = argsInput({
     oldName: Args.string({
       description: "Old remote name",
       required: true,
@@ -153,58 +158,70 @@ export class RemoteRenameCommand extends RootCommand {
     }),
   });
 
-  protected declare args: CommandArgs<typeof RemoteRenameCommand>;
-
   override async run() {
     await this.syg.renameRemote(this.args.oldName, this.args.newName);
   }
 }
 
 @command(["remote", "dump"])
-export class RemoteDumpCommand extends RootCommand {
-  protected declare flags: CommandFlags<typeof RemoteDumpCommand>;
-
+export class RemoteDumpCommand extends RootCommand<typeof RemoteDumpCommand> {
   static override aliases = ["remote"];
   static override summary = "Dump information about remote";
 
-  static override flags = extendsFlagsInput({
-    remote: Flags.string({
-      summary: "Remote name",
-      description: "If not given, dump default remote",
-      char: "r",
+  static override flags = flagsInput({
+    ...mutuallyExclusive({
+      remote: Flags.string({
+        summary: "Remote name",
+        description: "If not given, dump default remote",
+        char: "r",
+        exclusive: ["all"],
+      }),
+      all: Flags.boolean({
+        summary: "Dump all remotes",
+        char: "a",
+        exclusive: ["remote"],
+      }),
     }),
-    host: booleanFlag({
-      summary: "Dump remote hostname",
-      char: "H",
-      exactlyOne: ["host", "url", "directory"],
-    }),
-    url: booleanFlag({
-      summary: "Dump remote URL",
-      char: "U",
-      exactlyOne: ["host", "url", "directory"],
-    }),
-    directory: booleanFlag({
-      summary: "Dump remote directory",
-      char: "D",
-      exactlyOne: ["host", "url", "directory"],
-    }),
+    ...exactlyOne(
+      flagsInput({
+        host: Flags.boolean({
+          summary: "Dump remote hostname",
+          char: "H",
+          exactlyOne: ["host", "url", "directory"],
+        }),
+        url: Flags.boolean({
+          summary: "Dump remote URL",
+          char: "U",
+          exactlyOne: ["host", "url", "directory"],
+        }),
+        directory: Flags.boolean({
+          summary: "Dump remote directory",
+          char: "D",
+          exactlyOne: ["host", "url", "directory"],
+        }),
+      }),
+    ),
   });
 
   override async run() {
-    return Promise.resolve();
+    const remotes = this.flags.all
+      ? Object.values(await this.syg.getRemotes())
+      : [await this.syg.getRemoteInfo(this.flags.remote)];
+    for (const remote of remotes) {
+      if (this.flags.host) console.log(remote.host);
+      if (this.flags.url) console.log(`${remote.host}:${remote.directory}`);
+      if (this.flags.directory) console.log(remote.directory);
+    }
   }
 }
 
 @command("sync")
-export class SyncCommand extends RootCommand {
-  protected declare flags: CommandFlags<typeof SyncCommand>;
-  protected declare args: CommandArgs<typeof SyncCommand>;
-
+export class SyncCommand extends RootCommand<typeof SyncCommand> {
   static override summary = "Sync remote(s)";
 
   static override strict = true;
 
-  static override flags = extendsFlagsInput({
+  static override flags = flagsInput({
     remote: Flags.string({
       summary: "Remote names to sync. If omited, sync default remote",
       char: "r",
@@ -212,7 +229,7 @@ export class SyncCommand extends RootCommand {
     }),
   });
 
-  static override args = extendsArgsInput({
+  static override args = argsInput({
     path: Args.string({
       description: "Paths to sync",
     }),
@@ -225,64 +242,55 @@ export class SyncCommand extends RootCommand {
 }
 
 @command("git")
-export class GitCommand extends RootCommand {
+export class GitCommand extends RootCommand<typeof GitCommand> {
   static override summary = "Run arbitrary git command in syg git repo";
   static override description = dedent`
     Properly adds --git-dir and --work-tree options to command.
-
-    If first argument is -v, -vv, etc. then it will determine verbosity of syg and not of the git command.
   `;
-  protected override wrapper = true;
-  static override baseFlags = hiddenVerbosityFlags;
-
-  static override args = extendsArgsInput({
-    command: Args.string({
-      description: "Git command to run",
-    }),
-  });
+  static override args = wrappedCommandArgs();
 
   override async run() {
-    if (this.argv.length > 0 && this.argv[0].startsWith("-v")) {
-      this.parseVerbosity(this.argv.slice(0, 1));
-      this.argv.splice(0, 1);
-    }
-    this.configureLogging();
-    const result = await this.syg.sygGit.run(this.argv);
+    const result = await this.syg.sygGit.run(this.argv, { log: { shouldLog: true } });
     process.exit(result.exitCode ?? 0);
   }
 }
 
 @command("tool")
-export class ToolCommand extends RootCommand {
+export class ToolCommand extends RootCommand<typeof ToolCommand> {
   static override summary = "Run arbitrary git related tool in syg git repo";
   static override description = dedent`
     Properly sets environment variables GIT_DIR and GIT_WORK_TREE.
-
-    If first argument is -v, -vv, etc. then it will determine verbosity of syg.
   `;
-  protected override wrapper = true;
-  static override baseFlags = hiddenVerbosityFlags;
+  static override args = wrappedCommandArgs();
 
-  static override args = extendsArgsInput({
-    command: Args.string({
-      description: "Command to run",
+  override async run() {
+    const result = await this.syg.sygGit.runTool(this.argv);
+    process.exit(result.exitCode ?? 0);
+  }
+}
+
+@command("exec")
+export class ExecCommand extends RootCommand<typeof ExecCommand> {
+  static override summary = "Execute shell command on remote";
+
+  static override args = wrappedCommandArgs();
+  static override flags = flagsInput({
+    remote: Flags.string({
+      summary: "Remote name",
+      char: "r",
     }),
   });
 
   override async run() {
-    if (this.argv.length > 0 && this.argv[0].startsWith("-v")) {
-      this.parseVerbosity(this.argv.slice(0, 1));
-      this.argv.splice(0, 1);
-    }
-    this.configureLogging();
-    const result = await this.syg.sygGit.runTool(this.argv);
+    const config = await userConfig.get();
+    const ssh = await this.syg.remoteSsh(this.flags.remote);
+    const result = await ssh.run(this.argv, { source: config.syg?.execSource });
     process.exit(result.exitCode ?? 0);
   }
 }
 
 void runCli(__filename, __dirname, {
   description: "Syg, synced git",
-  development: true,
   defaultCommand: SyncCommand,
   topics: {
     remote: {

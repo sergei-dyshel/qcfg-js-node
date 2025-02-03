@@ -9,11 +9,13 @@ import { createSymlink, mkdir, move, rm } from "fs-extra";
 import { readFile, readlink, unlink, writeFile } from "fs/promises";
 import { dirname, isAbsolute } from "path";
 import * as semver from "semver";
-import { Ssh } from ".";
+import { Ssh, type Subprocess } from ".";
+import { userConfig } from "./config";
 import { exists, isSymbolicLink } from "./filesystem";
 import { Git } from "./git";
 import { ModuleLogger } from "./logging";
 import { absPath, pathJoin } from "./path";
+import type { Command } from "./subprocess";
 
 /**
  * Store git config file that is used for syg config too outside of syg git dir this way it can be
@@ -86,6 +88,7 @@ export class Syg {
    */
   static async detect(options?: Syg.BaseOptions): Promise<Syg> {
     const root = await Git.RevParse.showToplevel({ cwd: options?.cwd });
+    logger.debug(`Git repo root: ${root}`);
     const syg = new Syg({ ...options, root });
     await syg.checkSygGitDir();
     return syg;
@@ -166,26 +169,35 @@ export class Syg {
     });
   }
 
-  private async getRemote(
-    remote: string,
+  public async getRemoteInfo(
+    remote?: string,
     options?: { noCache?: boolean; notRequired?: false | undefined },
   ): Promise<Syg.RemoteInfo>;
-  private async getRemote(
-    remote: string,
+  public async getRemoteInfo(
+    remote?: string,
     options?: { noCache?: boolean; notRequired: true },
   ): Promise<Syg.RemoteInfo | undefined>;
-  private async getRemote(remote: string, options?: { noCache?: boolean; notRequired?: boolean }) {
+  public async getRemoteInfo(
+    remote?: string,
+    options?: { noCache?: boolean; notRequired?: boolean },
+  ) {
     if (options?.noCache ?? this.cachedRemotes === undefined)
       this.cachedRemotes = await this.getRemotes();
+    if (!remote) remote = await this.getDefaultRemote({ check: !options?.notRequired });
+    if (!remote) {
+      const remoteInfos = Object.values(this.cachedRemotes);
+      if (remoteInfos.length === 1) return remoteInfos[1];
+      return undefined;
+    }
     const remoteInfo = this.cachedRemotes[remote] as Syg.RemoteInfo | undefined;
     if (!options?.notRequired && !remoteInfo) throw new Syg.Error(`Remote ${remote} not found`);
     return remoteInfo;
   }
 
   async setupRemote(remote: string) {
-    const remoteInfo = await this.getRemote(remote);
+    const remoteInfo = await this.getRemoteInfo(remote);
     await this.verifyRemoteGitVersion(remoteInfo);
-    const remoteGit = this.remoteGit(remoteInfo);
+    const remoteGit = await this.remoteGit(remoteInfo);
     await remoteGit.setConfig("receive.denyCurrentBranch", "updateInstead");
     await remoteGit.setConfig("receive.shallowUpdate", true);
     await remoteGit.checkout([], {
@@ -197,13 +209,14 @@ export class Syg {
     await remoteGit.checkout([], { branchForce: BRANCH, quiet: !this.gitVerbose });
 
     await remoteGit.setConfig("core.hooksPath", "hooks");
-    const ssh = this.remoteSsh(remoteInfo);
+    const ssh = await this.remoteSsh(remoteInfo);
     await ssh.writeFile(".git/hooks/pre-receive", preReceiveHook, { mode: 0o755 });
     await ssh.writeFile(".git/hooks/push-to-checkout", pushToCheckoutHook, { mode: 0o755 });
   }
 
-  async getDefaultRemote(options?: { check?: false }): Promise<string | undefined>;
   async getDefaultRemote(options: { check: true }): Promise<string>;
+  // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
+  async getDefaultRemote(options?: { check?: false | boolean }): Promise<string | undefined>;
   async getDefaultRemote(options?: { check?: boolean }) {
     let remote = await this.sygGit.getConfigCustom(DEFAULT_REMOTE_KEY, { local: true });
     // getRemotes should not call recursively to itself via getDefaultRemote
@@ -233,7 +246,7 @@ export class Syg {
    * Rename remote and preserve default flag
    */
   async renameRemote(oldName: string, newName: string) {
-    const old = await this.getRemote(oldName);
+    const old = await this.getRemoteInfo(oldName);
     await this.sygGit.remoteRename(oldName, newName);
     if (old.isDefault) {
       await this.setDefaultRemote(newName, { noCheck: true });
@@ -320,6 +333,15 @@ export class Syg {
     return anyRemoteUpdated;
   }
 
+  async exec(command: Command, options?: { remote?: string; run?: Subprocess.RunOptions }) {
+    const config = await userConfig.get();
+    const info = await this.getRemoteInfo(options?.remote);
+    return Ssh.runCommand(info.host, command, {
+      cwd: info.directory,
+      source: config.syg?.execSource,
+    });
+  }
+
   private async moveConfigOut() {
     const insidePath = pathJoin(this.sygGitDir, "config");
     const outsidePath = pathJoin(this.root, CONFIG_FILE);
@@ -358,7 +380,7 @@ export class Syg {
   }
 
   private async verifyRemoteGitVersion(remoteInfo: Syg.RemoteInfo) {
-    const version = await this.remoteGit(remoteInfo).version();
+    const version = await (await this.remoteGit(remoteInfo)).version();
     logger.debug("Remote git version: " + version);
     if (semver.lt(version, MIN_GIT_VERSION)) {
       throw new Syg.Error(
@@ -367,15 +389,19 @@ export class Syg {
     }
   }
 
-  private remoteGit(remoteInfo: Syg.RemoteInfo) {
+  private async remoteGit(remoteInfo: Syg.RemoteInfo) {
     const options: Git.RunOptions = {
       gitBin: pathJoin(remoteInfo.gitBinDir, "git"),
-      runner: this.remoteSsh(remoteInfo).runner(),
+      runner: (await this.remoteSsh(remoteInfo)).runner(),
     };
     return new Git.Instance(options);
   }
 
-  private remoteSsh(remoteInfo: Syg.RemoteInfo) {
+  async remoteSsh(remote?: string | Syg.RemoteInfo) {
+    const remoteInfo =
+      typeof remote === "string" || remote === undefined
+        ? await this.getRemoteInfo(remote)
+        : remote;
     return new Ssh.Instance(remoteInfo.host, {
       cwd: remoteInfo.directory,
       log: { prefix: `+ [remote] `, logger },
