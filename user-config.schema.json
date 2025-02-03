@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "syg": {
+      "additionalProperties": false,
+      "properties": {
+        "execSource": {
+          "description": "Shell file to source on remote when running syg.exec",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "type": "object"
+}
