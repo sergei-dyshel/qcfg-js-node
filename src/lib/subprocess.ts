@@ -152,6 +152,9 @@ export function spawn(command: Command, options?: RunOptions) {
   const args = typeof command === "string" ? [] : command.slice(1);
 
   logRun(command, options?.log);
+
+  // append given env to that of the process
+  if (options?.env) options = { ...options, env: { ...process.env, ...options.env } };
   return childProcessSpawn(cmd, args, {
     ...options,
     stdio: buildStdio(options) as StdioOptions,
