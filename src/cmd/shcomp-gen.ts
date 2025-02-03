@@ -15,8 +15,9 @@ import {
   command,
   CommandArgs,
   CommandFlags,
-  extendsFlagsInput,
   Flags,
+  flagsInput,
+  OCLIF_COMMANDS_SYMBOL_NAME,
   OclifHelp,
   runCli,
 } from "../lib/oclif";
@@ -168,7 +169,7 @@ export class YargsCommand extends SpecificGenCommand {
 
 @command("all")
 export class AllCommand extends RootCommand {
-  static override flags = extendsFlagsInput({
+  static override flags = flagsInput({
     jobs: Flags.integer({
       char: "j",
       min: 0,
@@ -236,9 +237,10 @@ class Generator {
     await this.searchInPath();
     const cmdContent = await readFile(this.cmdPath, "utf-8");
     let parser: Parser | undefined = undefined;
-    if (/oclif/i.test(cmdContent)) parser = "oclif";
-    if (/yargs/i.test(cmdContent)) parser = "yargs";
-    if (parser) this.logger.debug("Detected parser: " + parser);
+    if (cmdContent.includes(OCLIF_COMMANDS_SYMBOL_NAME)) parser = "oclif";
+    // IMPROVE: find a better method to detect using yargs
+    if (/yargs_exports/i.test(cmdContent)) parser = "yargs";
+    if (parser) this.logger.info("Detected parser: " + parser);
     return parser;
   }
 
