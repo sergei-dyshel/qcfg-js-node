@@ -4,6 +4,7 @@ import { Subprocess } from "..";
 import * as Cmd from "../cmdline-builder";
 import { exists } from "../filesystem";
 import { pathJoin } from "../path";
+import { logRun } from "../subprocess";
 import {
   Error,
   HEAD,
@@ -101,6 +102,7 @@ export class Instance {
  * automatically prepended based on options.
  */
 export async function run(args: string[], options?: RunOptions) {
+  logRun(["git", ...args], options?.log);
   return internalRun([...Cmd.build(preCmdSchema, options), ...args], options);
 }
 
@@ -116,7 +118,7 @@ export async function runTool(args: string[], options?: RunOptions) {
   if (options?.workTree) env["GIT_WORK_TREE"] = options.workTree;
   if (options?.gitDir) env["GIT_DIR"] = options.gitDir;
   const runner = options?.runner ?? Subprocess.run;
-  return runner(args, deepMerge(options, { run: { env } }));
+  return runner(args, deepMerge(options?.run, { env }));
 }
 
 /**
