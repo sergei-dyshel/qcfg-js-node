@@ -17,13 +17,30 @@ if (!canResolveLocalOrGlobal("typescript")) {
   process.exit(1);
 }
 
-import { Args, Command, CommandHelp, execute, Flags, Help, type Interfaces } from "@oclif/core";
+import {
+  Args,
+  Command,
+  CommandHelp,
+  Config,
+  execute,
+  Help,
+  type Interfaces,
+  Flags as OclifFlags,
+} from "@oclif/core";
+import { CLIError } from "@oclif/core/errors";
 import { Hook, type Hooks } from "@oclif/core/hooks";
-import type { BooleanFlag, OclifConfiguration, PJSON } from "@oclif/core/interfaces";
+import type {
+  BooleanFlag,
+  CommandError,
+  FlagInput,
+  InferredArgs,
+  OclifConfiguration,
+  PJSON,
+} from "@oclif/core/interfaces";
 import * as PluginAutoComplete from "@sergei-dyshel/oclif-plugin-autocomplete-cjs";
 import { assert, assertNotNull } from "@sergei-dyshel/typescript/error";
 import { DefaultMap } from "@sergei-dyshel/typescript/map";
-import { mapKeys } from "@sergei-dyshel/typescript/object";
+import { mapKeys, objectEntries } from "@sergei-dyshel/typescript/object";
 import { camelCase, kebabCase } from "@sergei-dyshel/typescript/string";
 import { canBeUndefined, extendsType } from "@sergei-dyshel/typescript/types";
 import "reflect-metadata";
@@ -37,32 +54,100 @@ import {
 } from "./logging";
 import { basename } from "./path";
 
-export { Args, Command, Flags, Hook };
+export { Args, CLIError, Command, CommandError, Config, Hook, type InferredArgs };
 
-/**
- * A better version of {@link Flags.boolean} that upon parsing will be inferred as `boolean` or
- * `boolean | undefined` (depending on presense of default value).
- *
- * {@link Flags.boolean} will be inferred as `any`.
- */
-export function booleanFlag(
-  options: Partial<BooleanFlag<boolean>> & { default: boolean },
-): BooleanFlag<boolean>;
-export function booleanFlag(
-  options?: Partial<BooleanFlag<boolean>>,
-): BooleanFlag<boolean | undefined>;
-export function booleanFlag(options?: Partial<BooleanFlag<boolean>>) {
-  return Flags.boolean(options);
-}
+export class OclifError extends CLIError {}
 
-/**
- * Common flags used in many CLI tools. Some of flag fields are pre-filled (but overridable).
- */
-export namespace CommonFlags {
-  export function force(options: Partial<BooleanFlag<boolean>>) {
-    return extendsFlagsInput({ force: booleanFlag({ char: "f", ...options }) });
+export class OclifWrappedComandMissing extends OclifError {}
+
+export namespace Flags {
+  // Re-export oclif's Flags
+  export const custom = OclifFlags.custom;
+  export const string = OclifFlags.string;
+  export const file = OclifFlags.file;
+  export const integer = OclifFlags.integer;
+  export const directory = OclifFlags.directory;
+
+  type BooleanOpts = Partial<BooleanFlag<boolean>>;
+
+  /**
+   * A better version of {@link OclifFlags.boolean} that upon parsing will be inferred as `boolean`
+   * or `boolean | undefined` (depending on presense of default value).
+   *
+   * {@link OclifFlags.boolean} will be inferred as `any`.
+   */
+  export function boolean(options: BooleanOpts & { default: boolean }): BooleanFlag<boolean>;
+  export function boolean(options?: BooleanOpts): BooleanFlag<boolean | undefined>;
+  export function boolean(options?: BooleanOpts) {
+    return OclifFlags.boolean(options);
+  }
+
+  /**
+   * Counts number of times flag was used.
+   *
+   * Used for e.g. verbosity, like `-vvv`.
+   *
+   * NOTE: Due to hacky nature of implmentation, when verbose flags are not given at all, will have
+   * `undefined` value instead of zero.
+   */
+  export function count(
+    options?: Partial<Omit<BooleanFlag<number>, "allowNo" | "default" | "parse">>,
+  ) {
+    return OclifFlags.boolean<number | undefined>({
+      ...options,
+      parse: (input, context, opts) => {
+        assert(input);
+        assert(!opts.allowNo);
+        let count = 0;
+        for (const arg of context.argv) {
+          if (arg === "--") break;
+          if (arg === "--" + opts.name) count++;
+          if (opts.char) {
+            const match = new RegExp(`^-(${opts.char}+)`).exec(arg);
+            if (match) count += match[1].length;
+          }
+        }
+        return Promise.resolve(count);
+      },
+    });
+  }
+
+  //
+  // Common flags used in many CLI tools. Some of flag fields are pre-filled (but overridable).
+  //
+
+  export function force(options: BooleanOpts) {
+    return flagsInput({ force: boolean({ char: "f", ...options }) });
+  }
+
+  export function verbose(options?: BooleanOpts) {
+    return flagsInput({
+      verbose: count({
+        char: "v",
+        summary: "Verbosity level. Can be used multiple times.",
+        ...options,
+      }),
+    });
   }
 }
+
+/** Automatically sets `exclusive` for all other flags */
+export function mutuallyExclusive<F extends FlagsInput>(flags: F): F {
+  for (const [name, flag] of objectEntries(flags)) {
+    flag.exclusive = Object.keys(flags).filter((key) => key !== name);
+  }
+  return flags;
+}
+
+/** Sets `exactlyOne` on all flags */
+export function exactlyOne<F extends FlagsInput>(flags: F): F {
+  const allFlags = Object.keys(flags);
+  for (const flag of Object.values(flags)) {
+    flag.exactlyOne = allFlags;
+  }
+  return flags;
+}
+
 /**
  * Provides basic machinery for writing Oclif commands. You should always subclass this class and
  * not {@link Command} directly.
@@ -76,7 +161,7 @@ export namespace CommonFlags {
  * ```
  */
 export abstract class BaseCommand extends Command {
-  static override baseFlags = {};
+  static override baseFlags = {} as const;
 
   static override strict = false;
   /**
@@ -85,7 +170,14 @@ export abstract class BaseCommand extends Command {
    * In this case flags and args will not be parsed and can be accessed as is via
    * {@link Command.argv}.
    */
-  protected wrapper = false;
+  protected get wrapper() {
+    const args = Object.keys(this.ctor.args);
+    if (args.includes(WRAPPED_COMMAND_ARG_NAME)) {
+      assert(args.length === 1, "For wrapped command must use only one args");
+      return true;
+    }
+    return false;
+  }
 
   protected args!: CommandArgs<typeof BaseCommand>;
   protected flags!: CommandFlags<typeof BaseCommand>;
@@ -93,15 +185,65 @@ export abstract class BaseCommand extends Command {
   public override async init(): Promise<void> {
     await super.init();
 
-    if (this.wrapper) {
-      assert(canBeUndefined(this.ctor.flags) === undefined, "Wrapper command can not have flags");
-      return;
-    }
-
     const toKebabCase = (key: string) => kebabCase(key);
     const toCamelCase = (key: string) => camelCase(key);
 
-    const { args, flags } = await this.parse({
+    if (this.wrapper) {
+      if (this.argv.length === 0) throw new OclifWrappedComandMissing("Wrapped command missing");
+      // `parse()` will reset `argv` to passed value
+      const savedArgv = this.argv;
+      let n = 1;
+      while (n <= savedArgv.length) {
+        const argv = savedArgv.slice(0, n);
+        const { args, flags, error } = await (async () => {
+          try {
+            const result = await this.parse(
+              {
+                flags: mapKeys(canBeUndefined(this.ctor.flags) ?? {}, toKebabCase),
+                baseFlags: mapKeys(
+                  canBeUndefined((super.ctor as typeof BaseCommand).baseFlags) ?? {},
+                  toKebabCase,
+                ),
+                // special argument signalizing start of wrapped command
+                args: argsInput({
+                  command: Args.string(),
+                }),
+              },
+              argv,
+            );
+            return { ...result, error: undefined };
+          } catch (err) {
+            if (err instanceof CLIError) return { args: undefined, flags: undefined, error: err };
+            throw err;
+          }
+        })();
+        if (error) {
+          if (n === savedArgv.length || savedArgv[n] === "--") {
+            throw error;
+          }
+          // at this stage Oclif error means some flag value or required flag is missing, so
+          // try grabbing more tokens from argv
+          n++;
+          continue;
+        }
+        // if "command" arg filled by parsing, we reached first non-flag argument
+        if (args.command) {
+          this.flags = mapKeys(flags, toCamelCase) as typeof this.flags;
+          this.argv = savedArgv.splice(n - 1);
+          break;
+        }
+        if (n === savedArgv.length) throw new OclifWrappedComandMissing("Wrapped command missing");
+        if (savedArgv[n] === "--") {
+          this.flags = mapKeys(flags, toCamelCase) as typeof this.flags;
+          this.argv = savedArgv.splice(n + 1);
+          break;
+        }
+        n++;
+      }
+      return;
+    }
+
+    const { args, flags, argv } = await this.parse({
       flags: mapKeys(canBeUndefined(this.ctor.flags) ?? {}, toKebabCase),
       baseFlags: mapKeys(
         canBeUndefined((super.ctor as typeof BaseCommand).baseFlags) ?? {},
@@ -113,44 +255,36 @@ export abstract class BaseCommand extends Command {
     });
     this.flags = mapKeys(flags, toCamelCase) as typeof this.flags;
     this.args = mapKeys(args, toCamelCase) as typeof this.args;
+    this.argv = argv as string[];
   }
-
-  abstract override run(): Promise<void>;
 }
 
 /**
- * Helper function to be used for {@link Command.flags} property to ensure proper type..
+ * Helper function to be used for {@link Command.flags} property to ensure proper type.
  */
-export const extendsFlagsInput = extendsType<FlagsInput>();
-export const extendsArgsInput = extendsType<ArgsInput>();
+export const flagsInput = extendsType<FlagsInput>();
+export const argsInput = extendsType<ArgsInput>();
 
-const verbosityFlags = extendsFlagsInput({
-  verbose: Flags.boolean({
-    char: "v",
-    summary: "Verbosity level. Can be used multiple times.",
-    default: false,
-  }),
-});
+const WRAPPED_COMMAND_ARG_NAME = "__WRAPPED_CMD__";
 
 /**
- * To be used in wrapper commands to hide --verbose flag in usage.
+ * Specify that commands wraps another command.
  *
- * Usage:
- *
- * ```ts
- * static override baseFlags = { hiddenVerbosityFlags };
- * ```
+ * First non-flag argument or `--` will be used as start of wrapped command, which will be stored in
+ * {@link Command.argv}.
  */
-export const hiddenVerbosityFlags = extendsFlagsInput({
-  verbose: Flags.boolean({
-    hidden: true,
-  }),
-});
+export function wrappedCommandArgs(description?: string) {
+  return argsInput({
+    [WRAPPED_COMMAND_ARG_NAME]: Args.string({
+      description,
+    }),
+  });
+}
 
 export abstract class BaseCommandWithVerbosity extends BaseCommand {
   static override baseFlags = {
     ...super.baseFlags,
-    ...verbosityFlags,
+    ...Flags.verbose(),
   } as const;
 
   protected declare flags: CommandFlags<typeof BaseCommandWithVerbosity>;
@@ -158,77 +292,55 @@ export abstract class BaseCommandWithVerbosity extends BaseCommand {
   /** Log level when no verbose flags given. */
   protected verboseBaseLogLevel = LogLevel.WARNING;
 
-  /** Number of times --verbose/-v is specified. */
-  protected verbosity = 0;
-
   /** Use to override logging configuration in subclasses */
   protected logHandlerOptions: Omit<LogHandlerOptions, "level"> | undefined = {};
-
-  /**
-   * Parse verbosity flags.
-   *
-   * Should be used by wrapper commands (see {@link BaseCommand.wrapper}).
-   */
-  protected parseVerbosity(argv = this.argv) {
-    for (const arg of argv) {
-      if (arg === "--verbose") this.verbosity += 1;
-      if (/^-v+$/.test(arg)) this.verbosity += arg.length - 1;
-    }
-  }
 
   protected configureLogging() {
     configureLogging({
       handler: {
         ...this.logHandlerOptions,
-        level: LogLevels.addVerbosity(this.verboseBaseLogLevel, this.verbosity),
+        level: LogLevels.addVerbosity(this.verboseBaseLogLevel, this.flags.verbose ?? 0),
       },
     });
   }
   /** Must call parent method when overriding */
   public override async init() {
     await super.init();
-
-    // wrapper commands would need to configure verbosity themselves
-    if (this.wrapper) return;
-
-    if (this.flags.verbose) {
-      this.parseVerbosity();
-    }
-
-    configureLogging({
-      handler: {
-        ...this.logHandlerOptions,
-        level: LogLevels.addVerbosity(this.verboseBaseLogLevel, this.verbosity),
-      },
-    });
+    this.configureLogging();
   }
 
-  protected override catch(err: Interfaces.CommandError) {
+  protected override catch(err: CommandError) {
     // If error happened before all arguments are parsed (e.g. wrong flags)
     if (!loggingConfigured()) return super.catch(err);
 
     logError(err, {
-      hideName: this.verbosity == 0,
-      hideStack: this.verbosity == 0,
+      hideName: this.flags.verbose == 0,
+      hideStack: this.flags.verbose == 0,
     });
     this.exit(err.exitCode ?? 1);
     return Promise.resolve();
   }
 }
 
+/** Fixed version of {@link Interfaces.InferredFlags} */
+export type InferredFlags<T> =
+  T extends FlagInput<infer F>
+    ? F & {
+        json?: boolean | undefined;
+      }
+    : unknown;
+
 /**
  * Use this type of when you want to assign parsed flags to variable.
  *
  * T - current command class, B - inherited command class
  */
-export type CommandFlags<T extends typeof Command> = Interfaces.InferredFlags<
-  T["baseFlags"] & T["flags"]
->;
+export type CommandFlags<T extends typeof Command> = InferredFlags<T["baseFlags"] & T["flags"]>;
 
 /**
  * Use this type of when you want to assign parsed flags to variable.
  */
-export type CommandArgs<T extends typeof Command> = Interfaces.InferredArgs<T["args"]>;
+export type CommandArgs<T extends typeof Command> = InferredArgs<T["args"]>;
 
 type FlagsInput = (typeof Command)["flags"];
 type ArgsInput = (typeof Command)["args"];
@@ -303,7 +415,7 @@ export function runCli(
           commands: {
             strategy: "explicit",
             target: filename,
-            identifier: Object.keys({ allOclifCommands })[0],
+            identifier: OCLIF_COMMANDS_SYMBOL_NAME,
           },
           topicSeparator: " ",
           helpClass: {
@@ -325,6 +437,8 @@ export function runCli(
 export const allOclifCommands: Record<string, any> = {
   ...PluginAutoComplete.commands,
 };
+
+export const OCLIF_COMMANDS_SYMBOL_NAME = Object.keys({ allOclifCommands })[0];
 
 /**
  * Class decorator for adding Oclif command.
@@ -365,10 +479,36 @@ export function addHook<T extends keyof Hooks>(type: T, hook: Hook<T>) {
   allHooks.get(type).push(name);
 }
 
+class MyCommandHelp extends CommandHelp {
+  protected override usage() {
+    if (!(WRAPPED_COMMAND_ARG_NAME in this.command.args)) return super.usage();
+
+    // Oclif generates usage as "<args> <flags>" which will be misleading for wrapped command
+    // as it must come after flags. So we remove wrapped command arg during usage generation
+    // and modify usage manually
+    const savedArgs = { ...this.command.args };
+    // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+    delete this.command.args[WRAPPED_COMMAND_ARG_NAME];
+    const usage = this.defaultUsage() + " [--] COMMAND...";
+    this.command.args = savedArgs;
+    return usage;
+  }
+
+  protected override args(args: Command.Arg.Any[]) {
+    // Replace wrapped command arg name with readable name
+    return super.args(
+      args.map((arg) => {
+        if (arg.name === WRAPPED_COMMAND_ARG_NAME) return { ...arg, name: "COMMAND" };
+        return arg;
+      }),
+    );
+  }
+}
+
 /** Must export this class in main file */
 export class OclifHelp extends Help {
   protected override getCommandHelpClass(command: Command.Loadable): CommandHelp {
-    return new CommandHelp(
+    return new MyCommandHelp(
       { ...command, flags: mapKeys(command.flags, (key) => kebabCase(key)) },
       this.config,
       this.opts,
