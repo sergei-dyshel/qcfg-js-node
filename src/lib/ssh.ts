@@ -99,18 +99,25 @@ export function run(host: string, command?: Command, options?: RunOptions) {
 }
 
 export type RunCommandOptions = {
+  /** Directory to change on remote before executing rest of command */
   cwd?: string;
+  /** Shell file to source fore executing command */
+  source?: string;
 } & RunOptions;
 
 /**
  * Wraps over {@link run} and supports more options.
  */
 export function runCommand(host: string, command: Command, options?: RunCommandOptions) {
-  const cmd: Command = options?.cwd
-    ? `set -e; cd ${options.cwd}; ${joinCommand(command)}`
-    : command;
   logRun(command, options?.log);
-  return run(host, cmd, omit(options, "log"));
+  if (!!options?.cwd || options?.source) {
+    let cmd = "";
+    if (options.source) cmd += `source ${options.source}; `;
+    if (options.cwd) cmd += `set -e; cd ${options.cwd}; `;
+    cmd += joinCommand(command);
+    return run(host, cmd, omit(options, "log"));
+  }
+  return run(host, command, omit(options, "log"));
 }
 
 /**
