@@ -1,7 +1,7 @@
 /** Remote branch */
 // const BRANCH = "syg";
 
-import { assertNotNull, LoggableError } from "@sergei-dyshel/typescript/error";
+import { assert, assertNotNull, LoggableError } from "@sergei-dyshel/typescript/error";
 import { mapValuesAsync, objectEntries } from "@sergei-dyshel/typescript/object";
 import { dedent } from "@sergei-dyshel/typescript/string";
 import { canBeUndefined } from "@sergei-dyshel/typescript/types";
@@ -143,10 +143,15 @@ export class Syg {
     return { name, host, directory };
   }
 
-  async setRemoteGitBinDir(remote: string, gitBin: string) {
-    await this.sygGit.setConfigRemote(remote, "receivepack", pathJoin(gitBin, "git-receive-pack"), {
-      local: true,
-    });
+  async setRemoteGitBinDir(gitBin: string, remote?: string) {
+    await this.sygGit.setConfigRemote(
+      await this.checkRemote(remote),
+      "receivepack",
+      pathJoin(gitBin, "git-receive-pack"),
+      {
+        local: true,
+      },
+    );
   }
 
   /**
@@ -183,10 +188,9 @@ export class Syg {
   ) {
     if (options?.noCache ?? this.cachedRemotes === undefined)
       this.cachedRemotes = await this.getRemotes();
-    if (!remote) remote = await this.getDefaultRemote({ check: !options?.notRequired });
+    if (!remote)
+      remote = await this.getDefaultRemote({ check: !options?.notRequired, allowOnly: true });
     if (!remote) {
-      const remoteInfos = Object.values(this.cachedRemotes);
-      if (remoteInfos.length === 1) return remoteInfos[1];
       return undefined;
     }
     const remoteInfo = this.cachedRemotes[remote] as Syg.RemoteInfo | undefined;
@@ -194,7 +198,7 @@ export class Syg {
     return remoteInfo;
   }
 
-  async setupRemote(remote: string) {
+  async setupRemote(remote?: string) {
     const remoteInfo = await this.getRemoteInfo(remote);
     await this.verifyRemoteGitVersion(remoteInfo);
     const remoteGit = await this.remoteGit(remoteInfo);
@@ -214,10 +218,15 @@ export class Syg {
     await ssh.writeFile(".git/hooks/push-to-checkout", pushToCheckoutHook, { mode: 0o755 });
   }
 
-  async getDefaultRemote(options: { check: true }): Promise<string>;
-  // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
-  async getDefaultRemote(options?: { check?: false | boolean }): Promise<string | undefined>;
-  async getDefaultRemote(options?: { check?: boolean }) {
+  async getDefaultRemote(options: { check: true; allowOnly?: boolean }): Promise<string>;
+  async getDefaultRemote(options?: {
+    /** Throw if can't determine default remote */
+    // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
+    check?: false | boolean;
+    /** If default remote is not set but there is only one remote defined, return it */
+    allowOnly?: boolean;
+  }): Promise<string | undefined>;
+  async getDefaultRemote(options?: { check?: boolean; allowOnly?: boolean }) {
     let remote = await this.sygGit.getConfigCustom(DEFAULT_REMOTE_KEY, { local: true });
     // getRemotes should not call recursively to itself via getDefaultRemote
     const remotes = await this.getRemotes({ noDefault: true });
@@ -226,8 +235,35 @@ export class Syg {
       await this.unsetDefaultRemote();
       remote = undefined;
     }
+    if (!remote && options?.allowOnly) {
+      const remoteNames = Object.keys(remotes);
+      if (remoteNames.length === 1) remote = remoteNames[0];
+    }
     if (options?.check && !remote) throw new Syg.NoDefaultRemote("Default remote is not set");
     return remote;
+  }
+
+  /**
+   * Verify that all requested remotes are valid. If no remotes requested, verify that at least one
+   * remote exists and return list containing of default remote or single remote.
+   */
+  private async checkRemotes(remotes?: string[]): Promise<string[]> {
+    const allRemotes = await this.getRemotes({ noDefault: true });
+    if (remotes && remotes.length > 0) {
+      for (const remote of remotes) assert(remote in allRemotes, `Remote ${remote} does not exist`);
+      return remotes;
+    }
+    return [await this.getDefaultRemote({ allowOnly: true, check: true })];
+  }
+
+  private async checkRemote(remote?: string) {
+    const allRemotes = await this.getRemotes({ noDefault: true });
+    if (remote) {
+      assert(remote in allRemotes, `Remote ${remote} does not exist`);
+      return remote;
+    } else {
+      return await this.getDefaultRemote({ allowOnly: true, check: true });
+    }
   }
 
   async setDefaultRemote(remote: string, options?: { noCheck?: boolean }) {
@@ -267,6 +303,7 @@ export class Syg {
     /** Only sync these file paths/pathspecs. */
     pathspecs?: string[];
   }): Promise<boolean> {
+    const remotesToSync = await this.checkRemotes(options?.remotes);
     // make syg comit history as local repo
     const head = await this.git.revParseHead();
     logger.debug(`Local head: ${head}`);
@@ -299,13 +336,13 @@ export class Syg {
     }
 
     let anyRemoteUpdated = false;
-    const remotes = options?.remotes ?? [await this.getDefaultRemote({ check: true })];
-    for (const remote of remotes) {
+    for (const remote of remotesToSync) {
       logger.info(`Syncing ${remote}`);
       const remoteHead = await this.sygGit.revParse(`remotes/${remote}/${BRANCH}`, {
         verify: true,
         quiet: true,
       });
+      logger.debug(`Remote head: ${remoteHead}`);
       if (!remoteHead) {
         logger.debug("First sync, fetching remote");
         await this.sygGit.fetch([remote, BRANCH], { quiet: !this.gitVerbose });
@@ -315,7 +352,7 @@ export class Syg {
         cached: true,
         stat: true,
       });
-      if (addCommit === remoteHead) {
+      if (remoteHead === (addCommit ?? head)) {
         // if there are no changes on top of normal repo head, push anyway
         logger.info("Remote is already up to date, not pushing");
         continue;

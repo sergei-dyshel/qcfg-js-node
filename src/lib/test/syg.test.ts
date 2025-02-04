@@ -38,8 +38,8 @@ function sygTest(name: string, fn: (_: Syg) => Promise<void>) {
     await syg.checkSygGitDir();
     await syg.addRemote(REMOTE, "localhost", absPath(REMOTE_DIR), { setDefault: true });
     const gitBinDir = dirname(await which("git"));
-    await syg.setRemoteGitBinDir(REMOTE, gitBinDir);
-    await syg.setupRemote(REMOTE);
+    await syg.setRemoteGitBinDir(gitBinDir);
+    await syg.setupRemote();
 
     await writeFile(pathJoin(localDir, "a.txt"), "test1");
     await syg.sync();
