@@ -1,3 +1,4 @@
+import { normalizeArray } from "@sergei-dyshel/typescript/array";
 import { deepMerge } from "@sergei-dyshel/typescript/deep-merge";
 import type { AnyFunction } from "@sergei-dyshel/typescript/types";
 import { Subprocess } from "..";
@@ -40,6 +41,9 @@ export class Instance {
   init = this.wrap(init);
   clone = this.wrap(clone);
   add = this.wrap(add);
+  rm = this.wrap(rm);
+  checkIgnore = this.wrap(checkIgnore);
+  isIgnored = this.wrap(isIgnored);
   commit = this.wrap(commit);
   status = this.wrap(status);
   branchList = this.wrap(branchList);
@@ -225,6 +229,78 @@ export async function add(
     { all: Cmd.boolean(), update: Cmd.boolean() },
     deepMerge(logByDefault, options),
   );
+}
+
+/**
+ * `git rm`
+ *
+ * See {@link https://git-scm.com/docs/git-rm}.
+ */
+export async function rm(
+  pathspecs: string | string[],
+  options?: {
+    /**
+     * Use this option to unstage and remove paths only from the index. Working tree files, whether
+     * modified or not, will be left alone.
+     */
+    cached?: boolean;
+    /** Exit with a zero status even if no files matched. */
+    ignoreUnmatch?: boolean;
+    /**
+     * Git rm normally outputs one line (in the form of an rm command) for each file removed. This
+     * option suppresses that output.
+     */
+    quiet?: boolean;
+    /** Allow recursive removal when a leading directory name is given. */
+    recursive?: boolean;
+  } & RunOptions,
+) {
+  return runCommand(
+    "rm",
+    normalizeArray(pathspecs),
+    {
+      cached: Cmd.boolean(),
+      ignoreUnmatch: Cmd.boolean(),
+      recursive: Cmd.boolean({ custom: "-r" }),
+    },
+    deepMerge(logByDefault, options),
+  );
+}
+
+/**
+ * `git check-ignore`
+ *
+ * Exit status:
+ *
+ * - 0 - One or more of the provided paths is ignored.
+ * - 1 - None of the provided paths are ignored.
+ * - 128 - A fatal error was encountered.
+ *
+ * See {@link https://git-scm.com/docs/git-check-ignore}.
+ */
+export async function checkIgnore(
+  paths: string | string[],
+  options?: {
+    /** Don’t output anything, just set exit status. This is only valid with a single pathname. */
+    quiet?: boolean;
+    /**
+     * Instead of printing the paths that are excluded, for each path that matches an exclude
+     * pattern, print the exclude pattern together with the path.
+     */
+    verbose?: boolean;
+  } & RunOptions,
+) {
+  return runCommand("check-ignore", normalizeArray(paths), {}, deepMerge(options, withOut));
+}
+
+/**
+ * Check if path is ignored.
+ *
+ * Uses {@link checkIgnore}.
+ */
+export async function isIgnored(path: string, options?: RunOptions) {
+  const result = await checkIgnore(path, deepMerge(options, { run: { allowedExitCodes: [0, 1] } }));
+  return result.exitCode === 0;
 }
 
 /**
