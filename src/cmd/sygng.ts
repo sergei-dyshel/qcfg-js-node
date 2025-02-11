@@ -241,6 +241,26 @@ export class SyncCommand extends RootCommand<typeof SyncCommand> {
   }
 }
 
+@command("ignore")
+export class IgnoreCommand extends RootCommand<typeof IgnoreCommand> {
+  static override summary = "Ignore file(s)";
+  static override description = dedent`
+    Remote file from syg sync set, i.e. stop synchronizing it with sync command.
+    Adds path(s) to ${Syg.IGNORE_FILE} file.
+    `;
+  static override strict = false;
+
+  static override args = argsInput({
+    paths: Args.string({
+      description: "Path(s) to ignore",
+    }),
+  });
+
+  override async run() {
+    await this.syg.ignore(this.argv);
+  }
+}
+
 @command("git")
 export class GitCommand extends RootCommand<typeof GitCommand> {
   static override summary = "Run arbitrary git command in syg git repo";

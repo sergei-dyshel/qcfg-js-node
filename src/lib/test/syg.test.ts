@@ -5,7 +5,13 @@ import { Git } from "../git";
 import { getLogHandlers, LogLevel, ModuleLogger } from "../logging";
 import { absPath, pathJoin, which } from "../path";
 import { Syg } from "../syg";
-import { testConfigureLogging, testInDir, verifyFile } from "../testing";
+import {
+  testConfigureLogging,
+  testInDir,
+  verifyFile,
+  verifyFileDoesNotExist,
+  verifyFileExists,
+} from "../testing";
 
 const DEFAULT_BRANCH = "master";
 const logger = new ModuleLogger({ name: "test" });
@@ -58,8 +64,27 @@ function sygTest(name: string, fn: (_: Syg) => Promise<void>) {
     await verifyFile(pathJoin(REMOTE_DIR, "b.txt"), "b");
 
     await syg.renameRemote(REMOTE, "remote_renamed");
-    const updated = await syg.sync();
+    let updated = await syg.sync();
     assert(!updated);
+
+    // ignore previously syncd file and verify that it is removed from remote during sync
+    await syg.ignore("a.txt");
+    await syg.sync();
+    await verifyFileDoesNotExist(pathJoin(REMOTE_DIR, "a.txt"));
+    await verifyFileExists(pathJoin(localDir, "a.txt"));
+
+    // modify previously ignore file and verify that is doesn not sync
+    await writeFile(pathJoin(localDir, "a.txt"), "ignored");
+    updated = await syg.sync();
+    assert(!updated);
+    await verifyFileDoesNotExist(pathJoin(REMOTE_DIR, "a.txt"));
+
+    // modify not yet created file and verify that it's not synced
+    await syg.ignore("ignored.txt");
+    await writeFile(pathJoin(localDir, "ignored.txt"), "not_synced");
+    updated = await syg.sync();
+    assert(!updated);
+    await verifyFileDoesNotExist(pathJoin(REMOTE_DIR, "ignored.txt"));
 
     await fn(syg);
   });

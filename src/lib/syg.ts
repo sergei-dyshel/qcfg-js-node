@@ -1,12 +1,13 @@
 /** Remote branch */
 // const BRANCH = "syg";
 
+import { normalizeArray } from "@sergei-dyshel/typescript/array";
 import { assert, assertNotNull, LoggableError } from "@sergei-dyshel/typescript/error";
 import { mapValuesAsync, objectEntries } from "@sergei-dyshel/typescript/object";
 import { dedent } from "@sergei-dyshel/typescript/string";
 import { canBeUndefined } from "@sergei-dyshel/typescript/types";
 import { createSymlink, mkdir, move, rm } from "fs-extra";
-import { readFile, readlink, unlink, writeFile } from "fs/promises";
+import { appendFile, readFile, readlink, unlink, writeFile } from "fs/promises";
 import { dirname, isAbsolute } from "path";
 import * as semver from "semver";
 import { Ssh, type Subprocess } from ".";
@@ -25,11 +26,6 @@ const CONFIG_FILE = ".syg.config";
 
 const DEFAULT_REMOTE_KEY = "syg.defaultRemote";
 
-/**
- * File with patterns to ignore when syncing
- */
-const IGNORE_FILE = ".syg.gitignore";
-
 /** Max commits in git log before squashing */
 // const MAX_GIT_LOG_LEN = 50;
 
@@ -47,6 +43,11 @@ const ADD_COMMIT_MSG = "+ syg";
 const logger = new ModuleLogger({ name: "syg" });
 
 export class Syg {
+  /**
+   * File with patterns to ignore when syncing
+   */
+  static readonly IGNORE_FILE = ".syg.gitignore";
+
   readonly cwd?: string;
   readonly root?: string;
 
@@ -370,6 +371,26 @@ export class Syg {
     return anyRemoteUpdated;
   }
 
+  /**
+   * Ignore file(s), i.e. remove from sync set.
+   *
+   * Returns true if any new file was ignored.
+   */
+  async ignore(path: string | string[]) {
+    const paths = normalizeArray(path);
+    await this.sygGit.rm(paths, { cached: true, ignoreUnmatch: true });
+    let ignoredAny = false;
+    for (const path of paths) {
+      if (await this.sygGit.isIgnored(path)) {
+        logger.info(`${path} is already ignored`);
+        continue;
+      }
+      ignoredAny = true;
+      await appendFile(pathJoin(this.root, Syg.IGNORE_FILE), "\n" + path + "\n");
+    }
+    return ignoredAny;
+  }
+
   async exec(command: Command, options?: { remote?: string; run?: Subprocess.RunOptions }) {
     const config = await userConfig.get();
     const info = await this.getRemoteInfo(options?.remote);
@@ -401,16 +422,18 @@ export class Syg {
     await createSymlink(pathJoin("..", CONFIG_FILE), insidePath);
   }
 
+  private async;
+
   private async updateInfoExclude() {
     const excludePath = pathJoin(this.sygGitDir, "info", "exclude");
-    const ignorePath = pathJoin(this.root, IGNORE_FILE);
+    const ignorePath = pathJoin(this.root, Syg.IGNORE_FILE);
     let newContent = dedent`
       /${SYG_GIT}
-      /${IGNORE_FILE}
+      /${Syg.IGNORE_FILE}
       /${CONFIG_FILE}
     `;
     if (await exists(ignorePath)) {
-      const ignorePatterns = await readFile(pathJoin(this.root, IGNORE_FILE), "utf8");
+      const ignorePatterns = await readFile(pathJoin(this.root, Syg.IGNORE_FILE), "utf8");
       newContent += ignorePatterns;
     }
     await writeFile(excludePath, newContent);
