@@ -17,10 +17,15 @@ export const logger = new ModuleLogger({ name: "test" });
 
 const TEST_DIR = ".test";
 
-export async function verifyFile(path: string, text?: string) {
-  if (text === undefined) assert(!(await exists(path)), `File ${path} exists while it should not`);
+export async function verifyFileDoesNotExist(path: string) {
+  assert(!(await exists(path)), `File ${path} exists while it should not`);
+}
 
+export async function verifyFileExists(path: string) {
   assert(await exists(path), `File ${path} does not exists while it should`);
+}
+
+export async function verifyFile(path: string, text: string) {
   const currentText = await readFile(path, "utf8");
   assert(
     currentText === text,
