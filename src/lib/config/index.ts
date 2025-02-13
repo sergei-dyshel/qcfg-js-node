@@ -8,6 +8,13 @@ const schema = zod.object({
       Shell file to source on remote when running syg.exec
       `),
   }),
+  rsync: zod.object({
+    defaultRemoteRsyncPath: zod.string().optional().describe(dedent`
+      Default path to remote rsync binary file
+      `),
+  }),
 });
+
+export type UserConfigType = UserConfig.Type<typeof schema>;
 
 export const userConfig = new UserConfig(schema, { pathEnv: "QCFG_JS_CONFIG_PATH" });

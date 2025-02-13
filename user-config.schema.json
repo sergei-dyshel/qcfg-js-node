@@ -2,6 +2,16 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "additionalProperties": false,
   "properties": {
+    "rsync": {
+      "additionalProperties": false,
+      "properties": {
+        "defaultRemoteRsyncPath": {
+          "description": "Default path to remote rsync binary file",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "syg": {
       "additionalProperties": false,
       "properties": {
