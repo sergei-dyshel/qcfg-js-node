@@ -53,3 +53,8 @@ export function basename(path: string, stripExt = false) {
 export function absPath(path: string) {
   return p.resolve(path);
 }
+
+export function relPath(from: string, to?: string) {
+  to = to ?? process.cwd();
+  return p.relative(from, to);
+}

@@ -3,6 +3,7 @@ import { fail } from "@sergei-dyshel/typescript/error";
 import { omit } from "@sergei-dyshel/typescript/object";
 import type { FunctionWithArgs, Tail } from "@sergei-dyshel/typescript/types";
 import * as Fs from "node:fs/promises";
+import { normalize } from "node:path";
 import * as Cmd from "./cmdline-builder";
 import * as Subprocess from "./subprocess";
 import { joinCommand, logRun, type Command, type RunLogOptions, type Runner } from "./subprocess";
@@ -163,6 +164,19 @@ export async function readFile(host: string, path: string, options?: RunCommandO
     deepMerge(options, { run: { stdout: "pipe", check: true } }),
   );
   return result.stdout!;
+}
+
+/**
+ * Similar to {@link normalize}, but handles ssh paths.
+ *
+ * Like `normalize`, preserves trailing backslash.
+ */
+export function normalizePath(sshPath: string) {
+  if (sshPath.includes(":")) {
+    const [prefix, path] = sshPath.split(":", 2 /* limit */);
+    return [prefix, normalize(path)].join(":");
+  }
+  return normalize(sshPath);
 }
 
 const sshSchema = Cmd.schema({

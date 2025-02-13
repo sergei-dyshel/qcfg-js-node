@@ -15,7 +15,8 @@ import { userConfig } from "./config";
 import { exists, isSymbolicLink } from "./filesystem";
 import { Git } from "./git";
 import { ModuleLogger } from "./logging";
-import { absPath, pathJoin } from "./path";
+import { absPath, pathJoin, relPath } from "./path";
+import { rsync, type RsyncOptions } from "./rsync";
 import type { Command } from "./subprocess";
 
 /**
@@ -51,7 +52,7 @@ export class Syg {
   readonly cwd?: string;
   readonly root?: string;
 
-  /** Pass --verbose to all git commands */
+  /** Pass --verbose to all git commands, otherwise pass --quiet */
   readonly gitVerbose?: boolean;
 
   // git instance for regular git repo
@@ -141,7 +142,7 @@ export class Syg {
     this.clearCachedRemotes();
     if (options?.setDefault) await this.setDefaultRemote(name);
     if (options?.setup) await this.setupRemote(name);
-    return { name, host, directory };
+    return { name, host, directory, sshPath: `${host}:${directory}` };
   }
 
   async setRemoteGitBinDir(gitBin: string, remote?: string) {
@@ -168,6 +169,7 @@ export class Syg {
         name: remote,
         host: remoteInfo.fetch.protocol,
         directory: remoteInfo.fetch.pathname,
+        sshPath: remoteInfo.fetch.protocol + ":" + remoteInfo.fetch.pathname,
         gitBinDir: receivePack ? dirname(receivePack) : undefined,
       };
       if (defaultRemote !== null) info.isDefault = remote === defaultRemote;
@@ -248,11 +250,13 @@ export class Syg {
    * Verify that all requested remotes are valid. If no remotes requested, verify that at least one
    * remote exists and return list containing of default remote or single remote.
    */
-  private async checkRemotes(remotes?: string[]): Promise<string[]> {
+  private async checkRemotes(remotes?: string | string[]): Promise<string[]> {
     const allRemotes = await this.getRemotes({ noDefault: true });
-    if (remotes && remotes.length > 0) {
-      for (const remote of remotes) assert(remote in allRemotes, `Remote ${remote} does not exist`);
-      return remotes;
+    const remoteNames = normalizeArray(remotes);
+    if (remoteNames.length > 0) {
+      for (const remote of remoteNames)
+        assert(remote in allRemotes, `Remote ${remote} does not exist`);
+      return remoteNames;
     }
     return [await this.getDefaultRemote({ allowOnly: true, check: true })];
   }
@@ -390,6 +394,58 @@ export class Syg {
     }
     return ignoredAny;
   }
+  async rsync(
+    options?: Pick<
+      RsyncOptions,
+      | "update"
+      | "existing"
+      | "copyLinks"
+      | "include"
+      | "exclude"
+      | "remoteRsyncPath"
+      | "names"
+      | "verbose"
+      | "quiet"
+      | "progress"
+      | "stats"
+    > & {
+      remotes?: string | string[];
+      files?: string | string[];
+      /** Download files (by default uploads) */
+      download?: boolean;
+      /** Source directory relative to remote root */
+      src?: string;
+      /** Destination directory relative to remote root */
+      dst?: string;
+    },
+  ) {
+    const remotes = await this.checkRemotes(options?.remotes);
+    for (const remote of remotes) {
+      logger.info(`Rsyncing ${remote}`);
+      const info = await this.getRemoteInfo(remote);
+      let [srcDir, dstDir] = options?.download
+        ? [pathJoin(info.sshPath, options.src ?? ""), pathJoin(".", options.dst ?? "")]
+        : [pathJoin(".", options?.src ?? ""), pathJoin(info.sshPath, options?.dst ?? "")];
+      srcDir = Ssh.normalizePath(srcDir);
+      dstDir = Ssh.normalizePath(dstDir);
+      const files = normalizeArray(options?.files).map((file) =>
+        relPath(file, options?.download ? dstDir : srcDir),
+      );
+      await rsync([srcDir, dstDir], {
+        checksum: true,
+        archive: true,
+        recursive: true,
+        omitDirTimes: true,
+        files,
+        ...options,
+        run: {
+          check: true,
+          cwd: this.root,
+          log: { shouldLog: true },
+        },
+      });
+    }
+  }
 
   async exec(command: Command, options?: { remote?: string; run?: Subprocess.RunOptions }) {
     const config = await userConfig.get();
@@ -421,8 +477,6 @@ export class Syg {
     }
     await createSymlink(pathJoin("..", CONFIG_FILE), insidePath);
   }
-
-  private async;
 
   private async updateInfoExclude() {
     const excludePath = pathJoin(this.sygGitDir, "info", "exclude");
@@ -514,6 +568,7 @@ export namespace Syg {
     name: string;
     host: string;
     directory: string;
+    sshPath: string;
     gitBinDir?: string;
     isDefault?: boolean;
   }

@@ -38,6 +38,14 @@ abstract class RootCommand<
   }
 }
 
+const remotesFlag = flagsInput({
+  remotes: Flags.string({
+    summary: "Remote names to sync. If omited, sync default remote",
+    char: "r",
+    multiple: true,
+  }),
+});
+
 @command("init")
 export class InitCommand extends RootCommand<typeof InitCommand> {
   static override summary = "Init syg in current directory";
@@ -209,7 +217,7 @@ export class RemoteDumpCommand extends RootCommand<typeof RemoteDumpCommand> {
       : [await this.syg.getRemoteInfo(this.flags.remote)];
     for (const remote of remotes) {
       if (this.flags.host) console.log(remote.host);
-      if (this.flags.url) console.log(`${remote.host}:${remote.directory}`);
+      if (this.flags.url) console.log(remote.sshPath);
       if (this.flags.directory) console.log(remote.directory);
     }
   }
@@ -222,11 +230,7 @@ export class SyncCommand extends RootCommand<typeof SyncCommand> {
   static override strict = true;
 
   static override flags = flagsInput({
-    remote: Flags.string({
-      summary: "Remote names to sync. If omited, sync default remote",
-      char: "r",
-      multiple: true,
-    }),
+    ...remotesFlag,
   });
 
   static override args = argsInput({
@@ -236,7 +240,7 @@ export class SyncCommand extends RootCommand<typeof SyncCommand> {
   });
 
   override async run() {
-    const updated = await this.syg.sync({ remotes: this.flags.remote, pathspecs: this.argv });
+    const updated = await this.syg.sync({ remotes: this.flags.remotes, pathspecs: this.argv });
     if (!updated) logger.warn("No remotes were updated");
   }
 }
@@ -306,6 +310,69 @@ export class ExecCommand extends RootCommand<typeof ExecCommand> {
     const ssh = await this.syg.remoteSsh(this.flags.remote);
     const result = await ssh.run(this.argv, { source: config.syg?.execSource });
     process.exit(result.exitCode ?? 0);
+  }
+}
+
+@command("rsync")
+export class RsyncCommand extends RootCommand<typeof RsyncCommand> {
+  static override summary = "Upload/download files to remote using rsync";
+  static override args = argsInput({
+    files: Args.string({
+      summary: "File names to upload/download",
+    }),
+  });
+  static override flags = flagsInput({
+    ...remotesFlag,
+    update: Flags.boolean({
+      char: "u",
+      summary: "Only update old files",
+    }),
+    existing: Flags.boolean({
+      char: "E",
+      summary: "Only update existing files",
+    }),
+    download: Flags.boolean({
+      char: "d",
+      summary: "Download files (by default uploads)",
+    }),
+    copyLinks: Flags.boolean({
+      char: "L",
+      summary: "Followsymlinks",
+    }),
+    include: Flags.string({
+      char: "i",
+      summary: "Include files matching pattern",
+      multiple: true,
+    }),
+    exclude: Flags.string({
+      char: "e",
+      summary: "Exclude files matching pattern",
+      multiple: true,
+    }),
+    src: Flags.string({
+      char: "S",
+      summary: "Source directory relative to remote root",
+    }),
+    dst: Flags.string({
+      char: "D",
+      summary: "Source directory relative to remote root",
+    }),
+    names: Flags.boolean({
+      char: "n",
+      summary: "Print names of updated files",
+    }),
+    progress: Flags.boolean({
+      char: "p",
+      summary: "Show progress during transfer",
+    }),
+    stats: Flags.boolean({
+      char: "s",
+      summary: "Show stats in the end of transfer",
+    }),
+  });
+
+  override async run() {
+    await this.syg.rsync({ ...this.flags, verbose: false, files: this.argv });
   }
 }
 

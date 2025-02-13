@@ -86,6 +86,10 @@ function sygTest(name: string, fn: (_: Syg) => Promise<void>) {
     assert(!updated);
     await verifyFileDoesNotExist(pathJoin(REMOTE_DIR, "ignored.txt"));
 
+    await syg.rsync({ files: "a.txt", verbose: true });
+    await verifyFileExists(pathJoin(REMOTE_DIR, "a.txt"));
+    await verifyFileDoesNotExist(pathJoin(REMOTE_DIR, "ignored.txt"));
+
     await fn(syg);
   });
 }
