@@ -2,7 +2,7 @@ import { deepMerge } from "@sergei-dyshel/typescript/deep-merge";
 import { assert } from "@sergei-dyshel/typescript/error";
 import { test } from "@sergei-dyshel/typescript/testing";
 import { mkdir, readFile } from "fs/promises";
-import { emptyDir, exists, withTempDirectory } from "./filesystem";
+import { emptyDir, exists, TempDirectory } from "./filesystem";
 import {
   configureLogging,
   type LoggingOptions,
@@ -39,12 +39,11 @@ export async function verifyFile(path: string, text: string) {
  * Also chdir to that directory during the test.
  */
 export function testInTempDir(name: string, fn: () => Promise<void>) {
-  return test(name, async () =>
-    withTempDirectory(async (tempDir) => {
-      logger.info(`Running test in temporary directory ${tempDir}`);
-      return withChdir(tempDir, fn);
-    }),
-  );
+  return test(name, async () => {
+    await using tempDir = await TempDirectory.create();
+    logger.info(`Running test in temporary directory ${tempDir.name}`);
+    await withChdir(tempDir.name, fn);
+  });
 }
 
 /**

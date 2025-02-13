@@ -1,8 +1,9 @@
 import type { Awaitable } from "@sergei-dyshel/typescript/types";
 import * as fs from "node:fs";
-import { lstat, rm } from "node:fs/promises";
+import { lstat, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathJoin } from "./path";
 
 export { emptyDir, pathExists as exists } from "fs-extra";
 
@@ -28,18 +29,6 @@ export async function isDirectory(path: string) {
   }
 }
 
-export async function withTempDirectory<T>(
-  fn: (path: string) => Awaitable<T>,
-  options?: { prefix?: string; base?: string },
-) {
-  const path = await fs.promises.mkdtemp(join(options?.base ?? tmpdir(), options?.prefix ?? ""));
-  try {
-    return await fn(path);
-  } finally {
-    await rm(path, { recursive: true, force: true });
-  }
-}
-
 export async function isSymbolicLink(path: string) {
   try {
     const stat = await lstat(path);
@@ -48,5 +37,32 @@ export async function isSymbolicLink(path: string) {
     const errno = err as NodeJS.ErrnoException;
     if (errno.code === "ENOENT") return false;
     throw err;
+  }
+}
+
+export class TempDirectory implements AsyncDisposable {
+  private constructor(readonly name: string) {}
+
+  static async create(options?: { prefix?: string; base?: string }) {
+    const dir = await mkdtemp(join(options?.base ?? tmpdir(), options?.prefix ?? ""));
+    return new TempDirectory(dir);
+  }
+
+  static async with<T>(
+    fn: (path: string) => Awaitable<T>,
+    options?: { prefix?: string; base?: string },
+  ) {
+    await using tempDir = await TempDirectory.create(options);
+    return await fn(tempDir.name);
+  }
+
+  async writeFile(filename: string, text: string) {
+    const filePath = pathJoin(this.name, filename);
+    await writeFile(filePath, text);
+    return filePath;
+  }
+
+  async [Symbol.asyncDispose]() {
+    await rm(this.name, { recursive: true, force: true });
   }
 }

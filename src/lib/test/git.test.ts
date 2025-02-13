@@ -1,12 +1,11 @@
 import { gitShortHash } from "@sergei-dyshel/typescript";
 import { assert, assertDeepEqual, assertRejects } from "@sergei-dyshel/typescript/error";
 import { omit } from "@sergei-dyshel/typescript/object";
-import { test } from "@sergei-dyshel/typescript/testing";
 import { writeFile } from "node:fs/promises";
-import { withTempDirectory } from "../filesystem";
 import { Git } from "../git";
 import { ModuleLogger, configureLogging } from "../logging";
 import { pathJoin } from "../path";
+import { testInTempDir } from "../testing";
 
 const DEFAULT_BRANCH = "master";
 const USER_NAME = "Test Tester";
@@ -16,19 +15,11 @@ const logger = new ModuleLogger();
 configureLogging();
 
 function gitTest(name: string, fn: (_: Git.RunOptions) => Promise<void>) {
-  return test(name, async () =>
-    withTempDirectory(
-      async (path) => {
-        const options: Git.RunOptions = { cwd: path, run: { log: { logger } } };
-        await Git.init({ initialBranch: DEFAULT_BRANCH, ...options });
-        process.chdir(path);
-        return fn(options);
-      },
-      {
-        prefix: "git-test",
-      },
-    ),
-  );
+  return testInTempDir(name, async () => {
+    const options: Git.RunOptions = { run: { log: { logger } } };
+    await Git.init({ initialBranch: DEFAULT_BRANCH, ...options });
+    return fn(options);
+  });
 }
 
 void gitTest("isGitRoot", async (options) => {
