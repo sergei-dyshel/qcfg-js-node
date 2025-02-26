@@ -122,6 +122,7 @@ export namespace Flags {
 
   export function verbose(options?: BooleanOpts) {
     return flagsInput({
+      /** NOTE: will be undefined if no flags given */
       verbose: count({
         char: "v",
         summary: "Verbosity level. Can be used multiple times.",
@@ -313,9 +314,11 @@ export abstract class BaseCommandWithVerbosity extends BaseCommand {
     // If error happened before all arguments are parsed (e.g. wrong flags)
     if (!loggingConfigured()) return super.catch(err);
 
+    // Show verbose error only DEBUG loglevel
+    const hideVerbose = (this.flags.verbose ?? 0) < 2;
     logError(err, {
-      hideName: this.flags.verbose == 0,
-      hideStack: this.flags.verbose == 0,
+      hideName: hideVerbose,
+      hideStack: hideVerbose,
     });
     this.exit(err.exitCode ?? 1);
     return Promise.resolve();
