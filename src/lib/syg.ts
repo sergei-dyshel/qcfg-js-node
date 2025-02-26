@@ -129,20 +129,38 @@ export class Syg {
     await this.moveConfigOut();
   }
 
+  async removeRemote(name: string) {
+    await this.sygGit.remoteRemove(name);
+  }
+
+  /**
+   * Add new remote.
+   *
+   * @param name Remote name
+   * @param host Remote hostname. If empty, use "name" as hostname.
+   * @param directory Remote directory. If empty, use current directory.
+   */
   async addRemote(
     name: string,
-    host: string,
+    host?: string,
     directory?: string,
-    options?: { setDefault?: boolean; setup?: boolean },
+    options?: { setDefault?: boolean; setup?: boolean; force?: boolean },
   ): Promise<Syg.RemoteInfo> {
     if (!directory) directory = process.cwd();
+    let setDefault = options?.setDefault;
+    if (name in (await this.getRemotes())) {
+      if (!options?.force) throw new Syg.Error(`Remote ${name} already exists`);
+      // preserve default flag when removing and adding again
+      setDefault = setDefault ?? (await this.getDefaultRemote()) === name;
+      await this.removeRemote(name);
+    }
     if (!isAbsolute(directory)) throw new Syg.Error("Remote directory must be absolute path");
     const url = `${host}:${directory}`;
     await this.sygGit.remoteAdd(name, url);
     this.clearCachedRemotes();
-    if (options?.setDefault) await this.setDefaultRemote(name);
+    if (setDefault) await this.setDefaultRemote(name);
     if (options?.setup) await this.setupRemote(name);
-    return { name, host, directory, sshPath: `${host}:${directory}` };
+    return { name, host: host ?? name, directory, sshPath: `${host}:${directory}` };
   }
 
   async setRemoteGitBinDir(gitBin: string, remote?: string) {

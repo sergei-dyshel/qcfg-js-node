@@ -73,6 +73,10 @@ export class RemoteAddCommand extends RootCommand<typeof RemoteAddCommand> {
       char: "s",
       summary: "Setup remote",
     }),
+    force: Flags.boolean({
+      char: "f",
+      summary: "Overwrite remote if it already exists",
+    }),
   });
 
   static override args = argsInput({
@@ -91,11 +95,13 @@ export class RemoteAddCommand extends RootCommand<typeof RemoteAddCommand> {
   override async run() {
     await this.syg.addRemote(
       this.args.name,
-      this.args.host ?? this.args.name,
-      this.args.directory,
+      // Allow omitting hostname
+      this.args.directory ? this.args.host : this.args.name,
+      this.args.directory ?? this.args.host,
       {
         setDefault: this.flags.setDefault,
         setup: this.flags.setup,
+        force: this.flags.force,
       },
     );
   }
