@@ -23,6 +23,13 @@ export async function add(name: string, url: string, options?: RunOptions) {
 }
 
 /**
+ * `git remote remove <name>`
+ */
+export async function remove(name: string, options?: RunOptions) {
+  return runCommand(["remote", "remove"], [name], {}, deepMerge(logByDefault, options));
+}
+
+/**
  * List remotes.
  *
  * Parses output.

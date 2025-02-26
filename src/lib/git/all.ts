@@ -77,6 +77,7 @@ export class Instance {
   getConfigRemote = this.wrap(Config.Remote.get);
 
   remoteAdd = this.wrap(Remote.add);
+  remoteRemove = this.wrap(Remote.remove);
   remoteList = this.wrap(Remote.list);
   remoteRename = this.wrap(Remote.rename);
 
