@@ -23,7 +23,8 @@
     "./commander": "./src/lib/commander.ts",
     "./command-line": "./src/lib/command-line/index.ts",
     "./os": "./src/lib/os.ts",
-    "./oclif": "./src/lib/oclif.ts"
+    "./oclif": "./src/lib/oclif.ts",
+    "./stream": "./src/lib/stream.ts"
   },
   "prettier": "@sergei-dyshel/prettier-config",
   "scripts": {
