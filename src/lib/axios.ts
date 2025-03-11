@@ -1,0 +1,7 @@
+import type { AxiosError } from "axios";
+
+export { AxiosError } from "axios";
+
+export function isAxiosError(error: unknown): error is AxiosError {
+  return error instanceof Error && error.name === "AxiosError";
+}

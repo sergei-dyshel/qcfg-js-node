@@ -24,7 +24,8 @@
     "./command-line": "./src/lib/command-line/index.ts",
     "./os": "./src/lib/os.ts",
     "./oclif": "./src/lib/oclif.ts",
-    "./stream": "./src/lib/stream.ts"
+    "./stream": "./src/lib/stream.ts",
+    "./axios": "./src/lib/axios.ts"
   },
   "prettier": "@sergei-dyshel/prettier-config",
   "scripts": {
@@ -48,6 +49,7 @@
     "@sergei-dyshel/oclif-plugin-autocomplete-cjs": "file:./npm-tarballs/sergei-dyshel-oclif-plugin-autocomplete-cjs-3.2.11.tgz",
     "@sergei-dyshel/typescript": "*",
     "ansicolor": "^2.0.3",
+    "axios": "^1.7.8",
     "clipanion": "^4.0.0-rc.3",
     "cmd-ts": "^0.13.0",
     "commander": "^12.1.0",
