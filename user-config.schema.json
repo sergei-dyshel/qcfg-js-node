@@ -25,6 +25,10 @@
         }
       },
       "type": "object"
+    },
+    "viewer": {
+      "description": "Default GUI viewer command",
+      "type": "string"
     }
   },
   "type": "object"

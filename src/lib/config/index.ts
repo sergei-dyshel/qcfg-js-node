@@ -2,6 +2,8 @@ import { dedent } from "@sergei-dyshel/typescript/string";
 import { zod } from "@sergei-dyshel/typescript/zod";
 import { UserConfig } from "./user-config";
 
+export { UserConfig };
+
 const schema = zod.object({
   syg: zod.object({
     execSource: zod.string().optional().describe(dedent`
@@ -16,6 +18,10 @@ const schema = zod.object({
 
   baseTempDir: zod.string().optional().describe(dedent`
     Path to prefix directory for temporary files
+    `),
+
+  viewer: zod.string().optional().describe(dedent`
+    Default GUI viewer command
     `),
 });
 

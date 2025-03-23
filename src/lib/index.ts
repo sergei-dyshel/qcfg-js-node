@@ -1,4 +1,7 @@
+export { UserConfig } from "./config";
 export * from "./process";
+export { shlex } from "./shlex";
 export * as Ssh from "./ssh";
 export * as Subprocess from "./subprocess";
+export * from "./viewer";
 export * as Yargs from "./yargs";
