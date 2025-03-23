@@ -13,6 +13,10 @@ const schema = zod.object({
       Default path to remote rsync binary file
       `),
   }),
+
+  baseTempDir: zod.string().optional().describe(dedent`
+    Path to prefix directory for temporary files
+    `),
 });
 
 export type UserConfigType = UserConfig.Type<typeof schema>;

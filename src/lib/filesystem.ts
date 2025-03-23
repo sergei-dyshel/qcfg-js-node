@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import { lstat, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { userConfig } from "./config";
 import { pathJoin } from "./path";
 
 export { emptyDir, pathExists as exists } from "fs-extra";
@@ -40,18 +41,32 @@ export async function isSymbolicLink(path: string) {
   }
 }
 
-export class TempDirectory implements AsyncDisposable {
-  private constructor(readonly name: string) {}
+export interface TempDirectoryOptions {
+  /** Directory name prefix */
+  prefix?: string;
+  /** Base directory, defaults to OS temp directory */
+  base?: string;
+  /** Whether to keep the directory on dispose */
+  keep?: boolean;
+}
 
-  static async create(options?: { prefix?: string; base?: string }) {
-    const dir = await mkdtemp(join(options?.base ?? tmpdir(), options?.prefix ?? ""));
-    return new TempDirectory(dir);
+export class TempDirectory implements AsyncDisposable {
+  private constructor(
+    readonly name: string,
+    private readonly options?: TempDirectoryOptions,
+  ) {}
+
+  static async create(options?: TempDirectoryOptions) {
+    const dir = await mkdtemp(
+      join(
+        options?.base ?? (await userConfig.get()).baseTempDir ?? tmpdir(),
+        options?.prefix ?? "",
+      ),
+    );
+    return new TempDirectory(dir, options);
   }
 
-  static async with<T>(
-    fn: (path: string) => Awaitable<T>,
-    options?: { prefix?: string; base?: string },
-  ) {
+  static async with<T>(fn: (path: string) => Awaitable<T>, options?: TempDirectoryOptions) {
     await using tempDir = await TempDirectory.create(options);
     return await fn(tempDir.name);
   }
@@ -62,7 +77,11 @@ export class TempDirectory implements AsyncDisposable {
     return filePath;
   }
 
+  filePath(filename: string) {
+    return pathJoin(this.name, filename);
+  }
+
   async [Symbol.asyncDispose]() {
-    await rm(this.name, { recursive: true, force: true });
+    if (!this.options?.keep) await rm(this.name, { recursive: true, force: true });
   }
 }
