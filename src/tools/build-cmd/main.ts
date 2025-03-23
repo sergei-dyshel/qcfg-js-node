@@ -280,7 +280,8 @@ const appCmd = cmd.command({
         format: "cjs",
         platform: "node",
         target: "es2023",
-        sourcemap: noExec ? "linked" : "inline",
+        // inline sourcemaps do not work well with remote debugging
+        sourcemap: "linked",
         external,
         tsconfig,
         tsconfigRaw,
