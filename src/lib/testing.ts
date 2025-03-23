@@ -2,7 +2,7 @@ import { deepMerge } from "@sergei-dyshel/typescript/deep-merge";
 import { assert } from "@sergei-dyshel/typescript/error";
 import { test } from "@sergei-dyshel/typescript/testing";
 import { mkdir, readFile } from "fs/promises";
-import { emptyDir, exists, TempDirectory } from "./filesystem";
+import { emptyDir, exists } from "./filesystem";
 import {
   configureLogging,
   type LoggingOptions,
@@ -11,6 +11,7 @@ import {
   ModuleLogger,
 } from "./logging";
 import { withChdir } from "./process";
+import { TempDirectory } from "./tempDirectory";
 
 /** Should be used by all tests */
 export const logger = new ModuleLogger({ name: "test" });

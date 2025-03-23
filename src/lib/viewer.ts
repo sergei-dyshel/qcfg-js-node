@@ -2,11 +2,11 @@ import { assertNotNull } from "@sergei-dyshel/typescript/error";
 import type { ChildProcess } from "node:child_process";
 import { type FileHandle, open } from "node:fs/promises";
 import { userConfig } from "./config";
-import { TempDirectory } from "./filesystem";
 import { ModuleLogger } from "./logging";
 import { shlex } from "./shlex";
 import { writeStream } from "./stream";
 import { run } from "./subprocess";
+import { TempDirectory } from "./tempDirectory";
 
 const logger = new ModuleLogger();
 

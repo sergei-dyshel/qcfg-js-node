@@ -4,8 +4,8 @@ import { assert } from "@sergei-dyshel/typescript/error";
 import "@sergei-dyshel/typescript/shims";
 import * as Cmd from "./cmdline-builder";
 import { userConfig, type UserConfigType } from "./config";
-import { TempDirectory } from "./filesystem";
 import { run, type Runner, type RunOptions } from "./subprocess";
+import { TempDirectory } from "./tempDirectory";
 
 /**
  * Used to construct parameter value for `--info` See {@link https://www.mankier.com/1/rsync#--info}.
