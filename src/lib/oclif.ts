@@ -64,6 +64,7 @@ export namespace Flags {
   // Re-export oclif's Flags
   export const custom = OclifFlags.custom;
   export const string = OclifFlags.string;
+  export const option = OclifFlags.option;
   export const file = OclifFlags.file;
   export const integer = OclifFlags.integer;
   export const directory = OclifFlags.directory;
