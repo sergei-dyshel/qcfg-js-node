@@ -4,7 +4,6 @@
  *   Helper utilities for dealing with NodeJS streams.
  */
 
-import { assert } from "@sergei-dyshel/typescript/error";
 import { EOL } from "node:os";
 import { Transform, type TransformCallback } from "node:stream";
 
@@ -20,34 +19,85 @@ export function writeStream(stream: NodeJS.WritableStream, buffer: Uint8Array | 
   });
 }
 
+export function endStream(stream: NodeJS.WritableStream) {
+  return new Promise<void>((resolve, _) => {
+    stream.end(() => resolve());
+  });
+}
+
+export type LineTransformFunc = (line: string) => string;
+
+/**
+ * {@link Transform} stream that translates each whole line (ending with newline) with given
+ * function.
+ */
 export class LineBufferedTransform extends Transform {
-  // Look here:
+  // For more implementation tips look here:
   // https://github.com/bitfasching/node-line-transform-stream/blob/master/line-transform-stream.js
   // https://www.npmjs.com/package/line-transform-stream
   // https://codingpajamas.github.io/2015/04/26/nodejs-transform-stream
   // https://stackoverflow.com/questions/44664207/transform-stream-to-prepend-string-to-each-line
 
+  /**
+   * Latest non-terminated line.
+   *
+   * Note the difference between `undefined` (no text) and `""` (empty line).
+   */
   private buffer = "";
 
   constructor(
-    private readonly opts?: {
-      encoding?: BufferEncoding;
+    /**
+     * Line transformation function.
+     *
+     * Accepts line without not ending with newline and should return line not ending with newline.
+     */
+    private readonly func?: LineTransformFunc,
+    private readonly options?: {
+      /**
+       * Add trailing newline even if last line does not end with one.
+       *
+       * Useful when using multiple LineBufferedTransforms piping into same stream to make sure last
+       * lines are not merged together.
+       */
+      forceEndingEOL?: boolean;
     },
   ) {
-    super(opts);
+    super();
+  }
+
+  private transformLine(line: string) {
+    return this.func ? this.func(line) : line;
   }
 
   override _transform(
     chunk: string | Buffer,
-    encoding: BufferEncoding,
+    _: BufferEncoding,
     callback: TransformCallback,
   ): void {
-    assert(encoding === this.opts?.encoding);
-    const str = chunk.toString(this.opts.encoding);
-    const lines = str.split(EOL);
-    lines[0] = this.buffer + lines[0];
-    // there will be at least one element returned by split
-    this.buffer = lines.pop()!;
-    callback();
+    try {
+      const str = typeof chunk === "string" ? chunk : chunk.toString("utf8");
+      const lines = str.split(EOL);
+      lines[0] = this.buffer + lines[0];
+      // there will be at least one element returned by split
+      // if chunk ends with newline
+      this.buffer = lines.pop()!;
+      const out =
+        lines.length > 0 ? lines.map((line) => this.transformLine(line)).join(EOL) + EOL : "";
+      callback(null, out);
+    } catch (err) {
+      callback(err as Error);
+    }
+  }
+
+  override _flush(callback: TransformCallback): void {
+    try {
+      const out =
+        this.buffer != ""
+          ? this.transformLine(this.buffer) + (this.options?.forceEndingEOL ? EOL : "")
+          : "";
+      callback(null, out);
+    } catch (err) {
+      callback(err as Error);
+    }
   }
 }

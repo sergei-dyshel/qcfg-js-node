@@ -94,7 +94,7 @@ export class Output implements AsyncDisposable {
       logger.debug(`Piping through filter: ${filter}`);
       filterProc = run(shlex.split(filter), {
         stdin: "pipe",
-        stdout: toStdout ? "inherit" : "pipe",
+        stdout: toStdout ? undefined : "pipe",
       }).child;
     }
 

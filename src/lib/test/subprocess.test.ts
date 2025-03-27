@@ -1,18 +1,27 @@
 import { assertDeepEqual } from "@sergei-dyshel/typescript/error";
 import { test } from "@sergei-dyshel/typescript/testing";
+import { AsyncContext } from "../async-context";
 import { run } from "../subprocess";
 
-void test("run inherit stdout/stderr", async () => {
-  const result = await run(
-    "echo 'this should be printed to stdout' && echo 'this should be printed to stderr'",
-    {
-      check: true,
-      shell: true,
-    },
-  );
-  assertDeepEqual(result.stdout, undefined);
-  assertDeepEqual(result.stderr, undefined);
-});
+async function prefixOutErr(callback: () => Promise<void>) {
+  return AsyncContext.transformStd(callback, {
+    stdout: (s) => `[stdout] ${s}`,
+    stderr: (s) => `[stderr] ${s}`,
+  });
+}
+
+void test("run inherit stdout/stderr", () =>
+  prefixOutErr(async () => {
+    const result = await run(
+      "echo 'this should be printed to stdout' && echo 'this should be printed to stderr' >&2",
+      {
+        check: true,
+        shell: true,
+      },
+    );
+    assertDeepEqual(result.stdout, undefined);
+    assertDeepEqual(result.stderr, undefined);
+  }));
 
 void test("run pipe stdout", async () => {
   const stdoutMsg = "captured stdout";

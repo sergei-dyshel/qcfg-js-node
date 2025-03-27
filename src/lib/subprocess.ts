@@ -1,18 +1,34 @@
+/**
+ * @file Wrapper over {@link child_process} with interface similar to Python's subprocess.
+ *
+ *   Provides functions {@link run} and {@link spawn} with similiar interface to child_process's
+ *   counterparts.
+ *
+ *   Important differences though:
+ *
+ *   - Automatically runs in shell if `command` is a string.
+ *   - `stdin/stdout/stderr` are `inherit` by default (like in Python's `subuprocess` and unlike Node's
+ *       default `pipe`)
+ *   - `stdout/stderr` can be any stream, not just file/socket (piped internally)
+ */
+
 import { deepMerge } from "@sergei-dyshel/typescript/deep-merge";
-import { assertNotNull, fail } from "@sergei-dyshel/typescript/error";
+import { assert } from "@sergei-dyshel/typescript/error";
 import type { WithRequired } from "@sergei-dyshel/typescript/types";
-import {
-  spawn as childProcessSpawn,
-  type ChildProcess,
-  type IOType,
-  type PromiseWithChild,
-  type SpawnOptionsWithoutStdio,
-  type SpawnSyncOptions,
-  type StdioOptions,
-  type exec,
+import type {
+  ChildProcess,
+  IOType,
+  PromiseWithChild,
+  SpawnOptionsWithoutStdio,
+  SpawnSyncOptions,
+  exec,
 } from "node:child_process";
-import { PassThrough, Stream, type Writable } from "node:stream";
+import * as child_process from "node:child_process";
+import { ReadStream, WriteStream } from "node:fs";
+import { Socket } from "node:net";
+import { PassThrough, Stream, type Readable, type Writable } from "node:stream";
 import * as consumers from "node:stream/consumers";
+import { AsyncContext } from "./async-context";
 import { LogLevel, RootLogger, type Logger } from "./logging";
 import { shlex } from "./shlex";
 
@@ -37,13 +53,16 @@ export interface RunLogOptions {
 
 export type Command = string | string[];
 
+/** Subset of {@link IOType} */
+type StdioType = "pipe" | "ignore";
+
 export interface SubprocessRunOptions {
   /** Similar to {@link SpawnSyncOptions.input}, pass this text to stdin. */
-  input?: string | Stream;
-  stdin?: IOType | Stream;
-  stdout?: IOType | Writable;
+  input?: string;
+  stdin?: StdioType | Readable;
+  stdout?: StdioType | Writable;
   stderr?:
-    | IOType
+    | StdioType
     | Writable
     /** Redirect stderr to stdout */
     | "stdout";
@@ -129,25 +148,69 @@ export class RunError extends Error {
   }
 }
 
-function buildStdio(options?: RunOptions) {
-  const stdin = options?.input ? "pipe" : options?.stdin ?? "inherit";
+type StdioStream = WriteStream | ReadStream | Socket;
 
-  const stdout = options?.stdout ?? "inherit";
-
-  if (options?.stderr === "stdout") {
-    if (stdout == "inherit") return [stdin, process.stdout, process.stdout] as const;
-    if (stdout == "pipe") {
-      return [stdin, "pipe", "pipe"] as const;
-    }
-    fail(`stdout == ${String(stdout)}, stderr == ${options.stderr} are not supposrted`);
-  }
-  const stderr = options?.stderr ?? "inherit";
-
-  return [stdin, stdout, stderr];
+/**
+ * Check if stream can be passed to {@link child_process.spawn} `stdio` argument.
+ *
+ * According to {@link https://nodejs.org/api/child_process.html#optionsstdio}: "Share a readable or
+ * writable stream that refers to a tty, file, socket, or a pipe with the child process. The
+ * stream's underlying file descriptor is duplicated in the child process to the fd that corresponds
+ * to the index in the stdio array. The stream must have an underlying descriptor."
+ */
+function isValidStdioStream(stream: Stream): stream is StdioStream {
+  return stream instanceof WriteStream || stream instanceof ReadStream || stream instanceof Socket;
 }
 
-/** Wraps over {@link childProcessSpawn} */
+/**
+ * Convert `stdin/stdout/stderr` options in {@link RunOptions} to descriptors suitable for passing to
+ * {@link child_process.spawn}.
+ */
+function buildStdio({ input, stdin, stdout, stderr }: RunOptions) {
+  const spawnIn: IOType | StdioStream = input
+    ? "pipe"
+    : stdin === undefined
+      ? "inherit"
+      : stdin == "pipe" || stdin == "ignore"
+        ? stdin
+        : isValidStdioStream(stdin)
+          ? stdin
+          : "pipe";
+
+  if (input) assert(stdin === undefined, "Can not pass both 'stdin' and 'input' properties");
+
+  const asyncCtx = AsyncContext.get();
+  stdout = stdout ?? asyncCtx.stdout;
+  stderr = stderr ?? asyncCtx.stderr;
+
+  const spawnOut: IOType | StdioStream =
+    stdout === undefined
+      ? "inherit"
+      : stdout === "pipe" || stdout === "ignore"
+        ? stdout
+        : isValidStdioStream(stdout)
+          ? stdout
+          : "pipe";
+
+  const spawnErr: IOType | StdioStream =
+    stderr === undefined
+      ? "inherit"
+      : stderr === "pipe" || stderr === "ignore"
+        ? stderr
+        : stderr === "stdout"
+          ? spawnOut
+          : isValidStdioStream(stderr)
+            ? stderr
+            : "pipe";
+
+  return [spawnIn, spawnOut, spawnErr] as const;
+}
+
+/** Similar to {@link child_process.spawn} */
 export function spawn(command: Command, options?: RunOptions) {
+  const signal = options?.signal;
+  if (options?.check && options.throwIfAborted) signal?.throwIfAborted();
+
   const cmd = typeof command === "string" ? command : command[0];
   const args = typeof command === "string" ? [] : command.slice(1);
 
@@ -155,25 +218,76 @@ export function spawn(command: Command, options?: RunOptions) {
 
   // append given env to that of the process
   if (options?.env) options = { ...options, env: { ...process.env, ...options.env } };
-  return childProcessSpawn(cmd, args, {
+  const stdio = buildStdio(options ?? {});
+  const proc = child_process.spawn(cmd, args, {
     ...options,
-    stdio: buildStdio(options) as StdioOptions,
+    stdio: [...stdio], // convert readonly array to mutable
   });
+
+  const [spawnIn, spawnOut, spawnErr] = stdio;
+
+  if (options?.input) {
+    assert(spawnIn === "pipe");
+    proc.stdin!.end(options.input);
+  } else if (
+    options?.stdin &&
+    options.stdin !== "pipe" &&
+    options.stdin !== "ignore" &&
+    !isValidStdioStream(options.stdin)
+  ) {
+    assert(spawnIn === "pipe");
+    options.stdin.pipe(proc.stdin!);
+  }
+
+  const asyncCtx = AsyncContext.get();
+  const stdout = options?.stdout ?? asyncCtx.stdout;
+  const stderr = options?.stderr ?? asyncCtx.stderr;
+
+  if (stderr === "stdout" && stdout === "pipe") {
+    assert(spawnOut === "pipe" && spawnErr === "pipe");
+    const output = new PassThrough({ emitClose: true });
+    const procOut = proc.stdout!;
+    const procErr = proc.stderr!;
+    procOut.pipe(output, { end: false });
+    procErr.pipe(output, { end: false });
+
+    // close merged output only when both stdout/stderr pipes are closed
+    procOut.on("close", () => {
+      if (procErr.closed) output.end();
+    });
+    procErr.on("close", () => {
+      if (procOut.closed) output.end();
+    });
+
+    // we use those later in `run` to extract all output
+    proc.stdout = output;
+    proc.stderr = null;
+  }
+
+  if (spawnOut === "pipe" && stdout instanceof Stream) {
+    proc.stdout!.pipe(stdout, { end: false });
+    proc.stdout = null;
+  }
+
+  if (spawnErr === "pipe") {
+    if (stderr === "stdout" && stdout instanceof Stream) {
+      proc.stderr!.pipe(stdout, { end: false });
+      proc.stderr = null;
+    } else if (stderr instanceof Stream) {
+      proc.stderr!.pipe(stderr, { end: false });
+      proc.stderr = null;
+    }
+  }
+
+  return proc;
 }
 
 /**
  * Behaves similarly to {@link exec} but allows customizing stdin/stdout/stderr behavior like
- * {@link childProcessSpawn}
+ * {@link child_process.spawn}
  */
 export function run(command: Command, options?: RunOptions) {
-  const signal = options?.signal;
-  if (options?.check && options.throwIfAborted) signal?.throwIfAborted();
   const proc = spawn(command, options);
-  if (options?.input) {
-    assertNotNull(proc.stdin);
-    if (options.input instanceof Stream) options.input.pipe(proc.stdin);
-    if (typeof options.input === "string") proc.stdin.end(options.input);
-  }
 
   const procPromise = new Promise<void>((resolve, reject) => {
     proc.on("error", (err) => {
@@ -184,19 +298,10 @@ export function run(command: Command, options?: RunOptions) {
     });
   });
 
-  const [stdout, stderr] = (() => {
-    if (options?.stderr === "stdout" && options.stdout === "pipe") {
-      const output = new PassThrough();
-      proc.stdout!.pipe(output);
-      proc.stderr!.pipe(output);
-      return [output, undefined];
-    }
-    return [proc.stdout, proc.stderr];
-  })();
   const promise: Promise<RunResult> = Promise.all([
     procPromise,
-    stdout ? consumers.buffer(stdout) : undefined,
-    stderr ? consumers.buffer(stderr) : undefined,
+    proc.stdout ? consumers.buffer(proc.stdout) : undefined,
+    proc.stderr ? consumers.buffer(proc.stderr) : undefined,
   ])
     .then(([_, stdout, stderr]) => new RunResult(command, options, proc, stdout, stderr))
     .then((result) => {
