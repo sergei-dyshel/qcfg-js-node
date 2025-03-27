@@ -1,4 +1,4 @@
-import { formatError } from "@sergei-dyshel/typescript/error";
+import { formatError, LoggableError } from "@sergei-dyshel/typescript/error";
 import {
   formatErrorStackFrame,
   getCallsite,
@@ -41,6 +41,9 @@ export interface ErrorFormatOptions {
 
   /** Hide stack */
   hideStack?: boolean;
+
+  /** Show LoggableError data */
+  showData?: boolean;
 
   stackFrameFormat?: StackFrameFormatOptions;
 }
@@ -112,7 +115,9 @@ export class Logger {
         msg += `\n(Couldn not parse error stack trace: ${String(err)})\n${String(error.stack)}`;
       }
     }
-    this.logImpl(options?.level ?? LogLevel.ERROR, 1, msg, []);
+    const data = error instanceof LoggableError ? error.data ?? [] : [];
+    if (data.length > 0) msg += "\nError data: ";
+    this.logImpl(options?.level ?? LogLevel.ERROR, 1, msg, data);
     if (error instanceof Error && error.cause)
       this.logError(error.cause, { ...options, prefix: "Caused by: " });
   }

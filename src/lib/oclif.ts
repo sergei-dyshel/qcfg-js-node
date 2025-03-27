@@ -320,6 +320,7 @@ export abstract class BaseCommandWithVerbosity extends BaseCommand {
     logError(err, {
       hideName: hideVerbose,
       hideStack: hideVerbose,
+      showData: !hideVerbose,
     });
     this.exit(err.exitCode ?? 1);
     return Promise.resolve();
