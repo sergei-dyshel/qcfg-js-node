@@ -1,7 +1,7 @@
 /** Remote branch */
 // const BRANCH = "syg";
 
-import { normalizeArray } from "@sergei-dyshel/typescript/array";
+import { mapAsync, normalizeArray } from "@sergei-dyshel/typescript/array";
 import { assert, assertNotNull, LoggableError } from "@sergei-dyshel/typescript/error";
 import { mapValuesAsync, objectEntries } from "@sergei-dyshel/typescript/object";
 import { dedent } from "@sergei-dyshel/typescript/string";
@@ -11,6 +11,7 @@ import { appendFile, readFile, readlink, unlink, writeFile } from "fs/promises";
 import { dirname, isAbsolute } from "path";
 import * as semver from "semver";
 import { Ssh, type Subprocess } from ".";
+import { AsyncContext } from "./async-context";
 import { userConfig } from "./config";
 import { exists, isSymbolicLink } from "./filesystem";
 import { Git } from "./git";
@@ -358,39 +359,49 @@ export class Syg {
       addCommit = await this.sygGit.revParseHead();
     }
 
-    let anyRemoteUpdated = false;
-    for (const remote of remotesToSync) {
-      logger.info(`Syncing ${remote}`);
-      const remoteHead = await this.sygGit.revParse(`remotes/${remote}/${BRANCH}`, {
-        verify: true,
-        quiet: true,
-      });
-      logger.debug(`Remote head: ${remoteHead}`);
-      if (!remoteHead) {
-        logger.debug("First sync, fetching remote");
-        await this.sygGit.fetch([remote, BRANCH], { quiet: !this.gitVerbose });
-      }
-      await this.sygGit.diffRaw(`${remote}/${BRANCH}`, {
-        noPager: true,
-        cached: true,
-        stat: true,
-      });
-      if (remoteHead === (addCommit ?? head)) {
-        // if there are no changes on top of normal repo head, push anyway
-        logger.info("Remote is already up to date, not pushing");
-        continue;
-      }
+    const expectedRemoteHead = addCommit ?? head;
+    const maxRemoteLen = Math.max(...remotesToSync.map((r) => r.length));
+    const results = await mapAsync(remotesToSync, (remote) =>
+      remotesToSync.length > 1
+        ? AsyncContext.prefixStd(`{${remote}}`.padEnd(maxRemoteLen + 6), () =>
+            this.internalSync(remote, expectedRemoteHead),
+          )
+        : this.internalSync(remote, expectedRemoteHead),
+    );
 
-      await this.sygGit.push(remote, {
-        force: true,
-        verify: false,
-        quiet: !this.gitVerbose,
-        verbose: this.gitVerbose,
-      });
-      anyRemoteUpdated = true;
+    // return true if any of remotes was updated
+    return results.some((updated) => updated);
+  }
+
+  private async internalSync(remote: string, expectedRemoteHead: string) {
+    logger.info(`Syncing ${remote}`);
+    const remoteHead = await this.sygGit.revParse(`remotes/${remote}/${BRANCH}`, {
+      verify: true,
+      quiet: true,
+    });
+    logger.debug(`Remote head: ${remoteHead}`);
+    if (!remoteHead) {
+      logger.debug("First sync, fetching remote");
+      await this.sygGit.fetch([remote, BRANCH], { quiet: !this.gitVerbose });
+    }
+    await this.sygGit.diffRaw(`${remote}/${BRANCH}`, {
+      noPager: true,
+      cached: true,
+      stat: true,
+    });
+    if (remoteHead === expectedRemoteHead) {
+      // if there are no changes on top of normal repo head, push anyway
+      logger.info("Remote is already up to date, not pushing");
+      return false;
     }
 
-    return anyRemoteUpdated;
+    await this.sygGit.push(remote, {
+      force: true,
+      verify: false,
+      quiet: !this.gitVerbose,
+      verbose: this.gitVerbose,
+    });
+    return true;
   }
 
   /**
