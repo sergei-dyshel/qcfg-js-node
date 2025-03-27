@@ -158,7 +158,9 @@ function parseDiffOutput(origLines: string[]): Result {
     }
     if (line.startsWith(":")) {
       // --raw line, see https://git-scm.com/docs/git-diff#_raw_output_format
-      const [srcMode, dstMode, srcBlob, dstBlob, statusScore] = line.substring(1).split(/\s+/);
+      const [srcMode, dstMode, srcBlob, dstBlob, statusScore] = line
+        .substring(1)
+        .split(/\s+/, 5 /* limit */);
       const status = statusScore[0] as FileStatus;
       const srcPath = lines.shift();
       assertNotNull(srcPath);
@@ -199,7 +201,7 @@ function parseDiffOutput(origLines: string[]): Result {
         };
     } else {
       // --numstat line, see https://git-scm.com/docs/git-diff#_other_diff_formats
-      const [insertions, deletions, srcPath] = line.split(/\s+/);
+      const [insertions, deletions, srcPath] = line.split(/\s+/, 3 /* limit */);
       let entry: ValueOf<typeof result>;
       if (srcPath === "") {
         // copy/rename
