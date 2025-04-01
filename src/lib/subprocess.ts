@@ -335,6 +335,6 @@ export type Runner<Options = RunOptions> = (
 /**
  * Wraps {@link run} by adding default overridable run option.
  */
-export function runner(options: RunOptions): Runner {
+export function subprocessRunner(options?: RunOptions): Runner {
   return async (command, opts) => run(command, deepMerge(options, opts));
 }
