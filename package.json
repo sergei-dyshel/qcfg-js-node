@@ -25,7 +25,8 @@
     "./os": "./src/lib/os.ts",
     "./oclif": "./src/lib/oclif.ts",
     "./stream": "./src/lib/stream.ts",
-    "./axios": "./src/lib/axios.ts"
+    "./axios": "./src/lib/axios.ts",
+    "./cli": "./src/lib/cli.ts"
   },
   "prettier": "@sergei-dyshel/prettier-config",
   "scripts": {
