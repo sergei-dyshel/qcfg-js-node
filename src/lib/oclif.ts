@@ -165,7 +165,6 @@ export function exactlyOne<F extends FlagsInput>(flags: F): F {
 export abstract class BaseCommand extends Command {
   static override baseFlags = {} as const;
 
-  static override strict = false;
   /**
    * Indicates that this command is wrapper for another command.
    *

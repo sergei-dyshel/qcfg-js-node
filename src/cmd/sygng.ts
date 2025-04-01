@@ -233,8 +233,6 @@ export class RemoteDumpCommand extends RootCommand<typeof RemoteDumpCommand> {
 export class SyncCommand extends RootCommand<typeof SyncCommand> {
   static override summary = "Sync remote(s)";
 
-  static override strict = true;
-
   static override flags = flagsInput({
     ...remotesFlag,
   });
