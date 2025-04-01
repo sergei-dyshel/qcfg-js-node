@@ -356,7 +356,7 @@ const appCmd = cmd.command({
       const fullCmd = [...cmd, entryPoints[0].out, ...args.files.slice(1)];
       logger.debug("Running: ", shlex.join(fullCmd));
       const result = await run(fullCmd);
-      process.exit(result.exitCode!);
+      process.exit(result.exitCode);
     }
   },
 });
