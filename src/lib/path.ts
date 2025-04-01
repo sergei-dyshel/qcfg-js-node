@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import * as p from "node:path";
 import { default as which } from "which";
 
@@ -57,4 +58,26 @@ export function absPath(path: string) {
 export function relPath(from: string, to?: string) {
   to = to ?? process.cwd();
   return p.relative(from, to);
+}
+
+/**
+ * Replace leading tilde (~) with home directory
+ *
+ * Taken from {@link https://github.com/sindresorhus/untildify/blob/main/index.js}
+ */
+export function untildify(path: string) {
+  return path.replace(/^~(?=$|\/|\\)/, homedir());
+}
+
+/**
+ * Replace home directory in path with tilde (~)
+ *
+ * Taken from {@link https://github.com/sindresorhus/tildify/blob/main/index.js}
+ */
+export function tildify(path: string) {
+  const normPath = p.normalize(path) + p.sep;
+  const homeDir = homedir();
+  return (
+    normPath.startsWith(homeDir) ? normPath.replace(homeDir + p.sep, `~${p.sep}`) : normPath
+  ).slice(0, -1);
 }
