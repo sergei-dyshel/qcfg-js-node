@@ -1,9 +1,9 @@
 import type { Awaitable } from "@sergei-dyshel/typescript/types";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path/posix";
+import { join, sep } from "node:path";
 import { userConfig } from "./config";
-import { pathJoin } from "./path";
+import { pathJoin, untildify } from "./path";
 
 export interface TempDirectoryOptions {
   /** Directory name prefix */
@@ -20,12 +20,13 @@ export class TempDirectory implements AsyncDisposable {
   ) {}
 
   static async create(options?: TempDirectoryOptions) {
-    const dir = await mkdtemp(
-      join(
-        options?.base ?? (await userConfig.get()).baseTempDir ?? tmpdir(),
-        options?.prefix ?? "",
-      ),
+    let name = join(
+      options?.base ?? (await userConfig.get()).baseTempDir ?? tmpdir(),
+      options?.prefix ?? "",
     );
+    // path must end with separator as `mkdtemp` just adds random characters to it as is
+    if (!name.endsWith(sep)) name += sep;
+    const dir = await mkdtemp(untildify(name));
     return new TempDirectory(dir, options);
   }
 
