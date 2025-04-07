@@ -2,7 +2,9 @@ import { assertNotNull } from "@sergei-dyshel/typescript/error";
 import type { ChildProcess } from "node:child_process";
 import { type FileHandle, open } from "node:fs/promises";
 import { userConfig } from "./config";
-import { ModuleLogger } from "./logging";
+import { isDirectory } from "./filesystem";
+import { LogLevel, ModuleLogger } from "./logging";
+import { pathJoin } from "./path";
 import { shlex } from "./shlex";
 import { writeStream } from "./stream";
 import { run } from "./subprocess";
@@ -10,11 +12,17 @@ import { TempDirectory } from "./tempDirectory";
 
 const logger = new ModuleLogger();
 
+const NO_VIEWER = "-";
+
 export async function getDefaultViewer() {
   return (await userConfig.get()).viewer;
 }
 
 export function openViewer(path: string, viewer: string) {
+  if (viewer === NO_VIEWER) {
+    logger.debug("Not opening any viewer");
+    return;
+  }
   const cmdStr = viewer;
   assertNotNull(cmdStr, "Default viewer is not defined in config");
   const cmd = shlex.split(cmdStr);
@@ -103,23 +111,29 @@ export class Output implements AsyncDisposable {
 
     const path = await (async () => {
       let filename: string;
+      let dirname: string | undefined = undefined;
       if (options.output) {
         if (options.output.includes("/")) return options.output;
-        // TODO: allow output be a directory name, in that case create a file with defaultFilename inside it
-        filename = options.output;
+        if (await isDirectory(options.output)) {
+          dirname = options.output;
+          filename = options.defaultFilename;
+        } else filename = options.output;
       } else {
         filename = options.defaultFilename;
       }
-      const tempDir = await TempDirectory.create();
-      return tempDir.filePath(filename);
+      if (!dirname) dirname = (await TempDirectory.create()).name;
+      return pathJoin(dirname, filename);
     })();
     const file = await open(path, "w");
-    logger.debug(`Writing to file ${path}`);
+    // if output filename may be needed by user, increase level
+    const fileLogLevel =
+      path === options.output || viewer !== NO_VIEWER ? LogLevel.INFO : LogLevel.WARNING;
+    logger.log(fileLogLevel, `Writing to file ${path}`);
     const fileStream = file.createWriteStream();
     if (filterProc) {
       filterProc.stdout!.pipe(fileStream);
     }
-    return new Output(fileStream, viewer, filterProc, path, file);
+    return new Output(filterProc ? filterProc.stdin! : fileStream, viewer, filterProc, path, file);
   }
 
   async [Symbol.asyncDispose]() {
