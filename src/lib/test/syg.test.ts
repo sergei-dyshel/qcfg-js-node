@@ -1,4 +1,5 @@
 import { assert } from "@sergei-dyshel/typescript/error";
+import { test } from "@sergei-dyshel/typescript/testing";
 import { mkdir, writeFile } from "fs/promises";
 import { dirname } from "path";
 import { Git } from "../git";
@@ -20,8 +21,9 @@ const REMOTE_DIR = "remote";
 
 testConfigureLogging();
 
-function sygTest(name: string, fn: (_: Syg) => Promise<void>) {
-  return testInDir(name, async () => {
+void test(
+  "basic",
+  testInDir(async () => {
     const localDir = "local";
     await mkdir(REMOTE_DIR);
     await mkdir(localDir);
@@ -89,12 +91,5 @@ function sygTest(name: string, fn: (_: Syg) => Promise<void>) {
     await syg.rsync({ files: "a.txt", verbose: true });
     await verifyFileExists(pathJoin(REMOTE_DIR, "a.txt"));
     await verifyFileDoesNotExist(pathJoin(REMOTE_DIR, "ignored.txt"));
-
-    await fn(syg);
-  });
-}
-
-void sygTest("init", async (_) => {
-  logger.info("end");
-  return Promise.resolve();
-});
+  }),
+);
