@@ -25,6 +25,28 @@ export async function isDirectory(path: string) {
   }
 }
 
+export async function isFile(path: string) {
+  try {
+    const stat = await fs.promises.stat(path);
+    return stat.isFile();
+  } catch (err) {
+    const errno = err as NodeJS.ErrnoException;
+    if (errno.code === "ENOENT") return false;
+    throw err;
+  }
+}
+
+export function isFileSync(path: string) {
+  try {
+    const stat = fs.statSync(path);
+    return stat.isFile();
+  } catch (err) {
+    const errno = err as NodeJS.ErrnoException;
+    if (errno.code === "ENOENT") return false;
+    throw err;
+  }
+}
+
 export async function isSymbolicLink(path: string) {
   try {
     const stat = await lstat(path);

@@ -5,6 +5,7 @@
   "main": "src/index.ts",
   "bin": {
     "build-cmd": "./dist/tools/build-cmd",
+    "qcfg-build": "./dist/tools/qcfg-build",
     "qcfg-resolve-package": "./dist/tools/qcfg-resolve-package"
   },
   "exports": {
@@ -26,7 +27,8 @@
     "./oclif": "./src/lib/oclif.ts",
     "./stream": "./src/lib/stream.ts",
     "./axios": "./src/lib/axios.ts",
-    "./cli": "./src/lib/cli.ts"
+    "./cli": "./src/lib/cli.ts",
+    "./async": "./src/lib/async.ts"
   },
   "prettier": "@sergei-dyshel/prettier-config",
   "scripts": {

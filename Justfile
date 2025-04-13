@@ -16,6 +16,9 @@ _default:
 build-build-cmd:
     tsx src/tools/build-cmd/main.ts src/tools/build-cmd/main.ts
 
+build-qcfg-build:
+    tsx src/tools/qcfg-build.ts build src/tools/qcfg-build.ts
+
 gen-user-config-schema:
     build-cmd -r src/tools/gen-user-config-schema.ts -- user-config.schema.json
     prettier --write user-config.schema.json
