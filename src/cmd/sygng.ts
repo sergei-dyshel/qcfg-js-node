@@ -14,8 +14,8 @@ import {
   flagsInput,
   mutuallyExclusive,
   OclifHelp,
+  restArgs,
   runCli,
-  wrappedCommandArgs,
 } from "../lib/oclif";
 import { Syg } from "../lib/syg";
 export { allOclifCommands, OclifHelp };
@@ -275,7 +275,7 @@ export class GitCommand extends RootCommand<typeof GitCommand> {
   static override description = dedent`
     Properly adds --git-dir and --work-tree options to command.
   `;
-  static override args = wrappedCommandArgs();
+  static override args = restArgs();
 
   override async run() {
     const result = await this.syg.sygGit.run(this.argv, { log: { shouldLog: true } });
@@ -289,7 +289,7 @@ export class ToolCommand extends RootCommand<typeof ToolCommand> {
   static override description = dedent`
     Properly sets environment variables GIT_DIR and GIT_WORK_TREE.
   `;
-  static override args = wrappedCommandArgs();
+  static override args = restArgs();
 
   override async run() {
     const result = await this.syg.sygGit.runTool(this.argv);
@@ -301,7 +301,7 @@ export class ToolCommand extends RootCommand<typeof ToolCommand> {
 export class ExecCommand extends RootCommand<typeof ExecCommand> {
   static override summary = "Execute shell command on remote";
 
-  static override args = wrappedCommandArgs();
+  static override args = restArgs();
   static override flags = flagsInput({
     remote: Flags.string({
       summary: "Remote name",

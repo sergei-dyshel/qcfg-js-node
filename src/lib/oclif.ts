@@ -1,6 +1,14 @@
 /**
  * @file Wrapper for oclif framework.
  *
+ *   Some highlights:
+ *
+ *   - Fixed boolean flag.
+ *   - Count flag (like -vvv for verbosity).
+ *   - Automatic case conversion, e.g. `myFlag` <=> `--my-flag`
+ *   - Support bundling into single executable file.
+ *   - "Rest" arg for writing wrapper command.
+ *
  *   To work properly, you ust export {@link allOclifCommands} and {@link OclifHelp } in main file,
  *   e.g.:
  *
@@ -58,7 +66,11 @@ export { Args, CLIError, Command, CommandError, Config, Hook, type InferredArgs 
 
 export class OclifError extends CLIError {}
 
-export class OclifWrappedComandMissing extends OclifError {}
+export class OclifRestArgsRequired extends OclifError {
+  constructor(argName: string) {
+    super(`At least one argument is required for ${argName}`);
+  }
+}
 
 export namespace Flags {
   // Re-export oclif's Flags
@@ -141,6 +153,14 @@ export function mutuallyExclusive<F extends FlagsInput>(flags: F): F {
   return flags;
 }
 
+/** Group flags inside into separate section in help */
+export function helpGroup<F extends FlagsInput>(name: string, flags: F): F {
+  for (const flag of Object.values(flags)) {
+    flag.helpGroup = name;
+  }
+  return flags;
+}
+
 /** Sets `exactlyOne` on all flags */
 export function exactlyOne<F extends FlagsInput>(flags: F): F {
   const allFlags = Object.keys(flags);
@@ -165,77 +185,56 @@ export function exactlyOne<F extends FlagsInput>(flags: F): F {
 export abstract class BaseCommand extends Command {
   static override baseFlags = {} as const;
 
-  /**
-   * Indicates that this command is wrapper for another command.
-   *
-   * In this case flags and args will not be parsed and can be accessed as is via
-   * {@link Command.argv}.
-   */
-  protected get wrapper() {
-    const args = Object.keys(this.ctor.args);
-    if (args.includes(WRAPPED_COMMAND_ARG_NAME)) {
-      assert(args.length === 1, "For wrapped command must use only one args");
-      return true;
-    }
-    return false;
-  }
-
   protected args!: CommandArgs<typeof BaseCommand>;
   protected flags!: CommandFlags<typeof BaseCommand>;
 
   public override async init(): Promise<void> {
     await super.init();
 
-    const toKebabCase = (key: string) => kebabCase(key);
-    const toCamelCase = (key: string) => camelCase(key);
-
-    if (this.wrapper) {
-      if (this.argv.length === 0) throw new OclifWrappedComandMissing("Wrapped command missing");
+    const restArg = canBeUndefined(this.ctor.args[REST_ARG_NAME]);
+    if (restArg) {
+      assert(!!this.ctor.strict, "Can not use `strict = false` with 'rest' args");
+      assert(
+        Object.keys(this.ctor.args).at(-1) === REST_ARG_NAME,
+        "Rest arg must be defined last in args",
+      );
       // `parse()` will reset `argv` to passed value
       const savedArgv = this.argv;
-      let n = 1;
-      while (n <= savedArgv.length) {
+      let n = 0;
+
+      // at each iteration we take first `n` arguments and try to parse them according to spec
+      for (;;) {
+        if (n > savedArgv.length) {
+          // in previous iteration we just matched all non-rest args
+          this.argv = [];
+          break;
+        }
         const argv = savedArgv.slice(0, n);
-        const { args, flags, error } = await (async () => {
-          try {
-            const result = await this.parse(
-              {
-                flags: mapKeys(canBeUndefined(this.ctor.flags) ?? {}, toKebabCase),
-                baseFlags: mapKeys(
-                  canBeUndefined((super.ctor as typeof BaseCommand).baseFlags) ?? {},
-                  toKebabCase,
-                ),
-                // special argument signalizing start of wrapped command
-                args: argsInput({
-                  command: Args.string(),
-                }),
-              },
-              argv,
-            );
-            return { ...result, error: undefined };
-          } catch (err) {
-            if (err instanceof CLIError) return { args: undefined, flags: undefined, error: err };
+        try {
+          await this.parseWithCase(true /* strict */, argv);
+        } catch (err) {
+          if (!(err instanceof CLIError)) throw err;
+          // we tried parsing all args (or args up to `--` marker) but still get parsing error
+          if (n === savedArgv.length || (n < savedArgv.length && savedArgv[n] === "--")) {
+            if (err.constructor.name === "RequiredArgsError" && err.message.includes(REST_ARG_NAME))
+              throw new OclifRestArgsRequired(restArg.name);
             throw err;
-          }
-        })();
-        if (error) {
-          if (n === savedArgv.length || savedArgv[n] === "--") {
-            throw error;
           }
           // at this stage Oclif error means some flag value or required flag is missing, so
           // try grabbing more tokens from argv
           n++;
           continue;
         }
-        // if "command" arg filled by parsing, we reached first non-flag argument
-        if (args.command) {
-          this.flags = mapKeys(flags, toCamelCase) as typeof this.flags;
+        // if "rest" arg filled by parsing, we reached first argument which is part of rest args
+        if (this.args[REST_ARG_NAME]) {
+          // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+          delete this.args[REST_ARG_NAME];
           this.argv = savedArgv.splice(n - 1);
           break;
         }
-        if (n === savedArgv.length) throw new OclifWrappedComandMissing("Wrapped command missing");
+        if (n === savedArgv.length && restArg.required)
+          throw new OclifRestArgsRequired(restArg.name);
         if (savedArgv[n] === "--") {
-          this.flags = mapKeys(flags, toCamelCase) as typeof this.flags;
           this.argv = savedArgv.splice(n + 1);
           break;
         }
@@ -244,18 +243,32 @@ export abstract class BaseCommand extends Command {
       return;
     }
 
-    const { args, flags, argv } = await this.parse({
-      flags: mapKeys(canBeUndefined(this.ctor.flags) ?? {}, toKebabCase),
-      baseFlags: mapKeys(
-        canBeUndefined((super.ctor as typeof BaseCommand).baseFlags) ?? {},
-        toKebabCase,
-      ),
-      enableJsonFlag: this.ctor.enableJsonFlag,
-      args: mapKeys(canBeUndefined(this.ctor.args) ?? {}, toKebabCase),
-      strict: this.ctor.strict,
-    });
+    await this.parseWithCase(this.ctor.strict);
+  }
+
+  private async parseWithCase(strict: boolean, fullArgv?: string[]) {
+    const toKebabCase = (key: string) => kebabCase(key);
+    const toCamelCase = (key: string) => camelCase(key);
+
+    const { args, flags, argv } = await this.parse(
+      {
+        flags: mapKeys(canBeUndefined(this.ctor.flags) ?? {}, toKebabCase),
+        baseFlags: mapKeys(
+          canBeUndefined((super.ctor as typeof BaseCommand).baseFlags) ?? {},
+          toKebabCase,
+        ),
+        enableJsonFlag: this.ctor.enableJsonFlag,
+        args: mapKeys(canBeUndefined(this.ctor.args) ?? {}, (arg) =>
+          arg === REST_ARG_NAME ? arg : toKebabCase(arg),
+        ),
+        strict,
+      },
+      fullArgv,
+    );
     this.flags = mapKeys(flags, toCamelCase) as typeof this.flags;
-    this.args = mapKeys(args, toCamelCase) as typeof this.args;
+    this.args = mapKeys(args, (arg) =>
+      arg === REST_ARG_NAME ? arg : toCamelCase(arg),
+    ) as typeof this.args;
     this.argv = argv as string[];
   }
 }
@@ -266,18 +279,29 @@ export abstract class BaseCommand extends Command {
 export const flagsInput = extendsType<FlagsInput>();
 export const argsInput = extendsType<ArgsInput>();
 
-const WRAPPED_COMMAND_ARG_NAME = "__WRAPPED_CMD__";
+const REST_ARG_NAME = "__REST_ARG__";
 
 /**
- * Specify that commands wraps another command.
+ * Special marker argument definition which indicates that args/flags parsing must stop at first
+ * unknown argument or `--` and the rest of arguments will be stored in {@link Command.argv}.
  *
- * First non-flag argument or `--` will be used as start of wrapped command, which will be stored in
- * {@link Command.argv}.
+ * Must be used in the end of argument list, e.g.:
+ *
+ *     static override args = argsInput({
+ *        someArg: Args.string(),
+ *        ...restArgs({ name: "REST}"})
+ *     })
  */
-export function wrappedCommandArgs(description?: string) {
+export function restArgs(options?: {
+  name?: string;
+  description?: string;
+  /** At least one argument is required */
+  required?: boolean;
+}) {
   return argsInput({
-    [WRAPPED_COMMAND_ARG_NAME]: Args.string({
-      description,
+    [REST_ARG_NAME]: Args.string({
+      name: options?.name ?? "ARGS",
+      ...options,
     }),
   });
 }
@@ -300,7 +324,7 @@ export abstract class BaseCommandWithVerbosity extends BaseCommand {
     configureLogging({
       handler: {
         ...this.logHandlerOptions,
-        level: LogLevels.addVerbosity(this.verboseBaseLogLevel, this.flags.verbose ?? 0),
+        level: LogLevels.addVerbosity(this.verboseBaseLogLevel, this.verbose),
       },
     });
   }
@@ -310,12 +334,16 @@ export abstract class BaseCommandWithVerbosity extends BaseCommand {
     this.configureLogging();
   }
 
+  protected get verbose() {
+    return this.flags.verbose ?? 0;
+  }
+
   protected override catch(err: CommandError) {
     // If error happened before all arguments are parsed (e.g. wrong flags)
     if (!loggingConfigured()) return super.catch(err);
 
     // Show verbose error only DEBUG loglevel
-    const hideVerbose = (this.flags.verbose ?? 0) < 2;
+    const hideVerbose = this.verbose < 2;
     logError(err, {
       hideName: hideVerbose,
       hideStack: hideVerbose,
@@ -429,6 +457,7 @@ export function runCli(
           helpOptions: {
             flagSortOrder: "none",
             maxWidth: 80,
+            hideAliasesFromRoot: true,
           },
           hooks,
         },
@@ -438,7 +467,7 @@ export function runCli(
 }
 
 /** Must export this symbol in main file */
-export const allOclifCommands: Record<string, any> = {
+export const allOclifCommands: Record<string, typeof Command> = {
   ...PluginAutoComplete.commands,
 };
 
@@ -455,7 +484,7 @@ export function command(
   },
 ) {
   const joinedName = Array.isArray(name) ? name.join(":") : name;
-  return (constructor: object) => {
+  return (constructor: typeof Command) => {
     const fullName = options?.parent ? commandName(options.parent) + ":" + joinedName : joinedName;
     Reflect.defineMetadata("oclif:command-name", fullName, constructor);
     allOclifCommands[fullName] = constructor;
@@ -484,25 +513,63 @@ export function addHook<T extends keyof Hooks>(type: T, hook: Hook<T>) {
 }
 
 class MyCommandHelp extends CommandHelp {
-  protected override usage() {
-    if (!(WRAPPED_COMMAND_ARG_NAME in this.command.args)) return super.usage();
+  /**
+   * Get "real" command as defined in source
+   *
+   * {@link CommandHelp.command} is sanitized version where many flags/args properties are not
+   * preserved
+   */
+  private getCommand() {
+    const cmd = Object.values(allOclifCommands).find((command) => command.id === this.command.id);
+    assertNotNull(cmd, `Could not find command with id ${this.command.id}`);
+    return cmd;
+  }
 
-    // Oclif generates usage as "<args> <flags>" which will be misleading for wrapped command
-    // as it must come after flags. So we remove wrapped command arg during usage generation
-    // and modify usage manually
-    const savedArgs = { ...this.command.args };
-    // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
-    delete this.command.args[WRAPPED_COMMAND_ARG_NAME];
-    const usage = this.defaultUsage() + " [--] COMMAND...";
+  /**
+   * Generate usage part for args
+   *
+   * Copied from Oclif's DocOpts.to_string()
+   */
+  private argsUsage(args: Record<string, Command.Arg.Cached>) {
+    const lastArg = Object.values(args).at(-1);
+    if (!lastArg) {
+      // no args
+      return "";
+    }
+
+    const strs: string[] = [];
+    for (const [name, arg] of objectEntries(args)) {
+      let str = name === REST_ARG_NAME ? this.getCommand().args[REST_ARG_NAME].name : name;
+      str = str.toUpperCase();
+      if (name === REST_ARG_NAME || (arg === lastArg && !this.command.strict)) {
+        str += "...";
+      }
+      if (name === REST_ARG_NAME) str = " [--] " + str;
+      if (!arg.required) str = `[${str}]`;
+      strs.push(str);
+    }
+    return strs.join(" ");
+  }
+
+  protected override usage() {
+    // Oclif generates usage as "<args> <flags>" which is especially misleading when rest arg
+    // is used. Therefore we generate usage string without args and then separately generate args
+    // part and append.
+    const savedArgs = this.command.args;
+    this.command.args = {};
+    const usage = this.defaultUsage() + " " + this.argsUsage(savedArgs);
     this.command.args = savedArgs;
     return usage;
   }
 
   protected override args(args: Command.Arg.Any[]) {
-    // Replace wrapped command arg name with readable name
+    // Replace rest arg mangled name with readable name
     return super.args(
       args.map((arg) => {
-        if (arg.name === WRAPPED_COMMAND_ARG_NAME) return { ...arg, name: "COMMAND" };
+        if (arg.name === REST_ARG_NAME) {
+          const fullArg = this.getCommand().args[REST_ARG_NAME];
+          return { ...arg, name: fullArg.name };
+        }
         return arg;
       }),
     );

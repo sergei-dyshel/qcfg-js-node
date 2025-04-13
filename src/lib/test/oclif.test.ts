@@ -3,15 +3,15 @@
  */
 
 import { assertDeepEqual, assertRejects } from "@sergei-dyshel/typescript/error";
-import { test } from "@sergei-dyshel/typescript/testing";
+import { suite, test } from "@sergei-dyshel/typescript/testing";
 import {
   Args,
   argsInput,
   BaseCommand,
   Flags,
   flagsInput,
-  OclifWrappedComandMissing,
-  wrappedCommandArgs,
+  OclifRestArgsRequired,
+  restArgs,
   type CommandArgs,
   type CommandError,
   type CommandFlags,
@@ -73,65 +73,135 @@ void test("multi arg", async () => {
   assertDeepEqual(result.argv, ["-f", "bar"]);
 });
 
-class WrapperTestCommand extends TestCommand<typeof WrapperTestCommand> {
-  static override args = wrappedCommandArgs();
-  static override flags = flagsInput({
-    str: Flags.string({ char: "s" }),
-    count: Flags.count({ char: "c" }),
+void suite.only("rest args", () => {
+  class RestArgsTestCommand extends TestCommand<typeof RestArgsTestCommand> {
+    static override args = restArgs();
+    static override flags = flagsInput({
+      str: Flags.string({ char: "s" }),
+      count: Flags.count({ char: "c" }),
+    });
+  }
+
+  void test("no self-flags, only rest args", async () => {
+    const result = await RestArgsTestCommand.run(["foo", "-a"]);
+    assertDeepEqual(result.argv, ["foo", "-a"]);
+    assertDeepEqual(result.flags.count, undefined);
   });
-}
 
-void test("wrapper command", async () => {
-  // no self-flags, only wrapped command
-  let result = await WrapperTestCommand.run(["foo", "-a"]);
-  assertDeepEqual(result.argv, ["foo", "-a"]);
-  assertDeepEqual(result.flags.count, undefined);
+  void test("bool flag and rest args", async () => {
+    const result = await RestArgsTestCommand.run(["-c", "foo", "-c"]);
+    assertDeepEqual(result.argv, ["foo", "-c"]);
+    assertDeepEqual(result.flags.count, 1);
+  });
 
-  // self flag and wrapped command
-  result = await WrapperTestCommand.run(["-c", "foo", "-c"]);
-  assertDeepEqual(result.argv, ["foo", "-c"]);
-  assertDeepEqual(result.flags.count, 1);
+  void test("string flag and rest args", async () => {
+    const result = await RestArgsTestCommand.run(["-s", "foo", "bar"]);
+    assertDeepEqual(result.argv, ["bar"]);
+    assertDeepEqual(result.flags.str, "foo");
+  });
 
-  // string flag and wrapped command
-  result = await WrapperTestCommand.run(["-s", "foo", "bar"]);
-  assertDeepEqual(result.argv, ["bar"]);
-  assertDeepEqual(result.flags.str, "foo");
+  void test("start with --, only rest args", async () => {
+    const result = await RestArgsTestCommand.run(["--", "-s", "foo"]);
+    assertDeepEqual(result.argv, ["-s", "foo"]);
+    assertDeepEqual(result.flags.str, undefined);
+  });
 
-  // start with --
-  result = await WrapperTestCommand.run(["--", "-s", "foo"]);
-  assertDeepEqual(result.argv, ["-s", "foo"]);
-  assertDeepEqual(result.flags.str, undefined);
+  void test("flag as rest arg after --", async () => {
+    const result = await RestArgsTestCommand.run(["-s", "foo", "--", "-a"]);
+    assertDeepEqual(result.argv, ["-a"]);
+    assertDeepEqual(result.flags.str, "foo");
+  });
 
-  // no non-flag after -- but it's still ok
-  result = await WrapperTestCommand.run(["-s", "foo", "--", "-a"]);
-  assertDeepEqual(result.argv, ["-a"]);
+  void test("no flags or rest args", async () => {
+    const result = await RestArgsTestCommand.run([]);
+    assertDeepEqual(result.flags.str, undefined);
+    assertDeepEqual(result.argv, []);
+  });
 
-  // empty argv - missing wrapped command
-  await assertRejects(
-    async () => {
-      await WrapperTestCommand.run([]);
-    },
-    OclifWrappedComandMissing,
-    "blabla",
-  );
+  void test("noexistent flag", async () => {
+    await assertRejects(async () => {
+      await RestArgsTestCommand.run(["-s", "foo", "-a"]);
+    }, /Nonexistent flag/);
+  });
 
-  // noexistent flag
-  await assertRejects(
-    async () => {
-      await WrapperTestCommand.run(["-s", "foo", "-a"]);
-    },
-    /Nonexistent flag/,
-    "blabla",
-  );
+  void test("no value for flag before --", async () => {
+    await assertRejects(async () => {
+      await RestArgsTestCommand.run(["-s", "--"]);
+    }, /expects a value/);
+  });
+});
 
-  // no value for flag before --
-  await assertRejects(
-    async () => {
-      await WrapperTestCommand.run(["-s", "--"]);
-    },
-    /expects a value/,
-    "blabla",
-  );
+void suite.only("required rest args", () => {
+  class RequiredRestArgsTestCommand extends TestCommand<typeof RequiredRestArgsTestCommand> {
+    static override args = restArgs({
+      required: true,
+    });
+    static override flags = flagsInput({
+      str: Flags.string({ char: "s" }),
+      count: Flags.count({ char: "c" }),
+    });
+  }
 
-  // TEST: add cases with required flags
+  void test("empty argv - missing required rest args error", async () => {
+    await assertRejects(async () => {
+      await RequiredRestArgsTestCommand.run([]);
+    }, OclifRestArgsRequired);
+  });
+
+  void test("just -- - missing required rest args error", async () => {
+    await assertRejects(async () => {
+      await RequiredRestArgsTestCommand.run([]);
+    }, OclifRestArgsRequired);
+  });
+});
+
+void suite.only("required arg and rest args", () => {
+  class ArgAndRestArgsTestCommand extends TestCommand<typeof ArgAndRestArgsTestCommand> {
+    static override args = argsInput({
+      argument: Args.string({ required: true }),
+      ...restArgs(),
+    });
+    static override flags = flagsInput({
+      str: Flags.string({ char: "s" }),
+      count: Flags.count({ char: "c" }),
+    });
+  }
+
+  void test("empty argv - missing required arg error", async () => {
+    await assertRejects(
+      async () => ArgAndRestArgsTestCommand.run([]),
+      /Missing 1 required arg.*argument/s,
+    );
+  });
+
+  void test("-- and rest args", async () => {
+    await assertRejects(
+      async () => ArgAndRestArgsTestCommand.run(["--", "bar"]),
+      /Missing 1 required arg.*argument/s,
+    );
+  });
+
+  void test("only arg given", async () => {
+    const result = await ArgAndRestArgsTestCommand.run(["foo"]);
+    assertDeepEqual(result.args.argument, "foo");
+    assertDeepEqual(result.argv, []);
+  });
+
+  void test("arg and rest args given", async () => {
+    const result = await ArgAndRestArgsTestCommand.run(["foo", "bar"]);
+    assertDeepEqual(result.args.argument, "foo");
+    assertDeepEqual(result.argv, ["bar"]);
+  });
+
+  void test("arg, --, and rest args given", async () => {
+    const result = await ArgAndRestArgsTestCommand.run(["foo", "--", "bar"]);
+    assertDeepEqual(result.args.argument, "foo");
+    assertDeepEqual(result.argv, ["bar"]);
+  });
+
+  void test("arg and --", async () => {
+    const result = await ArgAndRestArgsTestCommand.run(["foo", "--"]);
+    assertDeepEqual(result.args.argument, "foo");
+    assertDeepEqual(result.argv, []);
+  });
 });
