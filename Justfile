@@ -20,8 +20,8 @@ build-qcfg-build:
     tsx src/tools/qcfg-build.ts build src/tools/qcfg-build.ts
 
 gen-user-config-schema:
-    build-cmd -r src/tools/gen-user-config-schema.ts -- user-config.schema.json
+    qcfg-build run src/tools/gen-user-config-schema.ts user-config.schema.json
     prettier --write user-config.schema.json
 
-build: build-build-cmd gen-user-config-schema
-    build-cmd src/tools/* src/cmd/*
+build: build-build-cmd build-qcfg-build gen-user-config-schema
+    qcfg-build build src/tools/* src/cmd/*
