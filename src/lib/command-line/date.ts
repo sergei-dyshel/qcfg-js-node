@@ -1,5 +1,7 @@
-import { RegExpWithNamedGroups } from "@sergei-dyshel/typescript";
+import { RegExpWithNamedGroups, type RegExpWithNamedGroupsType } from "@sergei-dyshel/typescript";
 import { assert, assertNotNull } from "@sergei-dyshel/typescript/error";
+
+const DATE_REGEX = new RegExpWithNamedGroups("((?<year>\\d+)-)?(?<month>\\d+)-(?<day>\\d+)");
 
 const TIMESTAMP_REGEX = new RegExpWithNamedGroups(
   "^(((((?<year>\\d+)-)?(?<month>\\d+)-)?(?<day>\\d+))\\.)?((?<hour>\\d+)(:(?<minute>\\d+)(:(?<second>\\d+))?)?)?$",
@@ -9,6 +11,11 @@ const DURATION_REGEX = new RegExpWithNamedGroups(
   "((?<weeks>\\d+)w)?((?<days>\\d+)d)?((?<hours>\\d+)h)?((?<minutes>\\d+)m)?",
 );
 
+/**
+ * Parse date/time range.
+ *
+ * If start/end timestamp is not provided, assume "now".
+ */
 export function parseDateRange(start?: string, end?: string, now?: Date) {
   if (!now) now = new Date();
   const startDate = parseTimestamp(start, now);
@@ -16,16 +23,35 @@ export function parseDateRange(start?: string, end?: string, now?: Date) {
   return { start: startDate, end: endDate };
 }
 
+/**
+ * Like {@link parseDateRange} but do not assume "now" for missing start/end.
+ */
+export function parseOptionalDateRange(start?: string, end?: string, now?: Date) {
+  if (!now) now = new Date();
+  const startDate = start ? parseTimestamp(start, now) : null;
+  const endDate = end ? parseTimestamp(end, now, startDate) : undefined;
+  return { start: startDate, end: endDate };
+}
+
 function myParseInt<D>(s: string | undefined, defaultValue: D): D | number {
   return s ? parseInt(s) : defaultValue;
 }
 
-export function parseTimestamp(ts: string | undefined, now: Date, start?: Date) {
+/**
+ * Parse start or end timestamp of time range.
+ *
+ * @param ts If undefined, assume "now".
+ * @param start When not undefined, we are parsing end timestamp (use `null` when start timestamp is
+ *   missing).
+ */
+export function parseTimestamp(ts: string | undefined, now: Date, start?: Date | null) {
   // by default return inverval from one hour ago until now
   if (ts === undefined) return start ? now : new Date(now.getTime() - 60 * 60 * 1000);
 
   assert(ts != "", "Timestamp cannot be empty");
-  const match = TIMESTAMP_REGEX.exec(ts);
+  const match =
+    TIMESTAMP_REGEX.exec(ts) ??
+    (DATE_REGEX.exec(ts) as unknown as RegExpWithNamedGroupsType<typeof TIMESTAMP_REGEX> | null);
   if (!match) {
     const match = DURATION_REGEX.exec(ts);
     assertNotNull(match, `Invalid timestamp format: ${ts}`);
@@ -44,9 +70,9 @@ export function parseTimestamp(ts: string | undefined, now: Date, start?: Date) 
   assertNotNull(match, `Invalid timestamp format: ${ts}`);
 
   const groups = match.groups!;
-  const second = groups.second ? parseInt(groups.second) : start ? 59 : 0;
-  const minute = groups.minute ? parseInt(groups.minute) : start ? 59 : 0;
-  const hour = groups.hour ? parseInt(groups.hour) : start ? 23 : 0;
+  const second = groups.second ? parseInt(groups.second) : start !== undefined ? 59 : 0;
+  const minute = groups.minute ? parseInt(groups.minute) : start !== undefined ? 59 : 0;
+  const hour = groups.hour ? parseInt(groups.hour) : start !== undefined ? 23 : 0;
 
   const base = start ?? now;
 
