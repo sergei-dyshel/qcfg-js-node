@@ -3,7 +3,7 @@ import { filterAsync, mapAsync } from "@sergei-dyshel/typescript/array";
 import { assert, assertNotNull } from "@sergei-dyshel/typescript/error";
 import * as esbuild from "esbuild";
 import { writeFileSync } from "node:fs";
-import { chmod, mkdir, readFile, rename, stat } from "node:fs/promises";
+import { chmod, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative } from "node:path";
 import { waitForever } from "../lib/async";
 import { exists, isDirectorySync, isFileSync } from "../lib/filesystem";
@@ -30,7 +30,6 @@ export { allOclifCommands, OclifHelp };
 
 const SRC_DIR = "src";
 const OUT_DIR = "dist";
-const TEMP_DIR = "dist/.temp";
 const DEFAULT_MAIN_FILE = "main.ts";
 
 const logger = RootLogger.get();
@@ -160,6 +159,7 @@ export class WatchCommand extends BaseBuildCommand {
       analyze: false,
       verbose: this.verbose > 1,
       rebuildLogLevel: LogLevel.INFO,
+      watch: true,
     });
     await context.watch();
     await waitForever();
@@ -228,9 +228,6 @@ class Target {
   /** Original entrypoint file name */
   entrypoint: string;
 
-  /** Temporary file where esbuild will write output */
-  temp: string;
-
   /** Output filename without '.js' extension (will be appended later if needed) */
   outNoExt: string;
 
@@ -253,7 +250,6 @@ class Target {
 
     // path of output file
     const outPath = relative(process.cwd(), join(options.cwd, OUT_DIR, srcRelPath));
-    this.temp = relative(process.cwd(), join(options.cwd, TEMP_DIR, stripExt(srcRelPath) + ".js"));
 
     this.outNoExt =
       basename(this.entrypoint) === DEFAULT_MAIN_FILE ? dirname(outPath) : stripExt(outPath);
@@ -287,7 +283,7 @@ class Target {
     }
 
     const stats = await stat(this.out);
-    const entryTs = Math.max(stats.mtimeMs, stats.ctimeMs);
+    const entryTs = stats.mtimeMs;
     let shouldRebuild = false;
     if (buildScriptTs > entryTs) {
       logger.debug(`${this.out} is older than build script, rebuilding`);
@@ -307,14 +303,28 @@ class Target {
     return false;
   }
 
-  async copy(metafile: esbuild.Metafile, logLevel: LogLevel) {
+  async write(
+    metafile: esbuild.Metafile,
+    bundle: esbuild.OutputFile,
+    sourceMap: esbuild.OutputFile,
+    logLevel: LogLevel,
+  ) {
     await mkdir(dirname(this.out), { recursive: true });
-    await rename(this.temp, this.out);
+
+    const expectedSourceMapAnnotation =
+      "//# sourceMappingURL=" + stripExt(basename(this.entrypoint)) + ".js.map";
+    let bundleText = bundle.text;
+    assert(bundleText.includes(expectedSourceMapAnnotation));
+    bundleText = bundleText.replace(
+      expectedSourceMapAnnotation,
+      "//# sourceMappingURL=" + basename(this.outNoExt) + ".js.map",
+    );
+    await writeFile(this.out, bundleText);
     if (this.options.executable) {
       await chmod(this.out, 0o755);
     }
     // must preserve sourcemap filename that was written in output file by esbuild
-    await rename(this.temp + ".map", this.outNoExt + ".js.map");
+    await writeFile(this.outNoExt + ".js.map", sourceMap.contents);
 
     const metafileName = this.outNoExt + ".metafile.json";
     writeFileSync(metafileName, JSON.stringify(metafile, null, 2));
@@ -367,7 +377,9 @@ async function createEsbuildContext(
   const esbuildOptions: esbuild.BuildOptions = {
     absWorkingDir: options.cwd,
     entryPoints: targets.map((t) => t.entrypoint),
-    outdir: TEMP_DIR,
+    write: false,
+    // files are not realy written there
+    outdir: OUT_DIR,
     outbase: SRC_DIR,
     sourceRoot: SRC_DIR,
     entryNames: "[dir]/[name]",
@@ -421,8 +433,17 @@ async function createEsbuildContext(
             }
             if (options.watch) console.log("[watch] build finished");
             assertNotNull(result.metafile);
-            await mapAsync(targets, (target) =>
-              target.copy(result.metafile!, options.rebuildLogLevel),
+            assert(
+              result.outputFiles!.length === targets.length * 2,
+              "Unexpected number of output files (should be bundled file and source map for each entrypoing)",
+            );
+            await mapAsync(targets, (target, i) =>
+              target.write(
+                result.metafile!,
+                result.outputFiles![2 * i + 1],
+                result.outputFiles![2 * i],
+                options.rebuildLogLevel,
+              ),
             );
 
             if (options.analyze) {
@@ -441,7 +462,7 @@ async function getInputTimestamps(inputs: string[]) {
     inputs.map(async (input) => {
       try {
         const stats = await stat(input);
-        const timestampMs = Math.max(stats.mtimeMs, stats.ctimeMs);
+        const timestampMs = stats.mtimeMs;
         return { input, timestampMs, deleted: false };
       } catch (err) {
         // assuming file doesn't exist
