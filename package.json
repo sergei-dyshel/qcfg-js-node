@@ -54,6 +54,7 @@
     "@sergei-dyshel/typescript": "*",
     "ansicolor": "^2.0.3",
     "axios": "^1.7.8",
+    "chokidar": "^4.0.3",
     "clipanion": "^4.0.0-rc.3",
     "cmd-ts": "^0.13.0",
     "commander": "^12.1.0",
