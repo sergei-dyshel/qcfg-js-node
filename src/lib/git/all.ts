@@ -58,7 +58,7 @@ export class Instance {
   show = this.wrap(show);
   push = this.wrap(push);
   mergeBase = this.wrap(mergeBase);
-  inAncestor = this.wrap(isAncestor);
+  isAncestor = this.wrap(isAncestor);
 
   revParseRaw = this.wrap(RevParse.raw);
   revParse = this.wrap(RevParse.hash);
@@ -553,7 +553,7 @@ export async function mergeBase(
 export async function isAncestor(commit1: string, commit2: string, options?: RunOptions) {
   const result = await mergeBase(
     [commit1, commit2],
-    deepMerge(options, { run: { allowedExitCodes: [0, 1] } }),
+    deepMerge({ ...options, isAncestor: true }, { run: { allowedExitCodes: [0, 1] } }),
   );
   return result.exitCode === 0;
 }
