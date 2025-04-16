@@ -1,24 +1,26 @@
 import { gitShortHash } from "@sergei-dyshel/typescript";
+import { addToDate } from "@sergei-dyshel/typescript/datetime";
 import { assert, assertDeepEqual, assertRejects } from "@sergei-dyshel/typescript/error";
 import { omit } from "@sergei-dyshel/typescript/object";
 import { test } from "@sergei-dyshel/typescript/testing";
 import type { Awaitable } from "@sergei-dyshel/typescript/types";
 import { writeFile } from "node:fs/promises";
+import { setTimeout } from "node:timers/promises";
 import { Git } from "../git";
-import { ModuleLogger, configureLogging } from "../logging";
+import { ModuleLogger } from "../logging";
 import { pathJoin } from "../path";
-import { testInTempDir } from "../testing";
+import { testConfigureLogging, testInDir } from "../testing";
 
 const DEFAULT_BRANCH = "master";
 const USER_NAME = "Test Tester";
 const USER_EMAIL = "tester@test.com";
 const logger = new ModuleLogger();
 
-configureLogging();
+testConfigureLogging();
 
 function gitTest(fn: (_: Git.RunOptions) => Awaitable<void>) {
-  return testInTempDir(async () => {
-    const options: Git.RunOptions = { run: { log: { logger } } };
+  return testInDir(async () => {
+    const options: Git.RunOptions = { run: { log: { logger, shouldLog: true } } };
     await Git.init({ initialBranch: DEFAULT_BRANCH, ...options });
     return fn(options);
   });
@@ -55,6 +57,20 @@ async function commitFile(
   assertDeepEqual(await Git.status(options), [`A  ${filename}`]);
   await Git.commit({ message, ...options });
   assertDeepEqual(await Git.status(options), []);
+}
+
+async function gitCommitFile(
+  git: Git.Instance,
+  filename: string,
+  content: string,
+  message: string,
+) {
+  await writeFile(filename, content);
+  assertDeepEqual(await git.status(), [`?? ${filename}`]);
+  await git.add(filename);
+  assertDeepEqual(await git.status(), [`A  ${filename}`]);
+  await git.commit({ message });
+  assertDeepEqual(await git.status(), []);
 }
 
 void test(
@@ -180,5 +196,30 @@ void test(
 
     const gitDir = pathJoin(process.cwd(), Git.DEFAULT_GIT_DIR);
     assertDeepEqual(await Git.RevParse.resolveGitDir(gitDir, options), gitDir);
+  }),
+);
+
+void test.only(
+  "git log filtering",
+  gitTest(async (options) => {
+    const git = new Git.Instance(options);
+    await gitCommitFile(git, "test1.txt", "test line", "commit1\n\nfoo bar");
+    // make commits have different seconds in commit date
+    await setTimeout(1500);
+    await gitCommitFile(git, "test2.txt", "test line", "commit2\n\nfoo qux");
+
+    const log1 = await git.logParse(undefined, { grep: "bar" });
+    assertDeepEqual(log1.length, 1);
+    const fooBarEntry = log1[0];
+    assertDeepEqual(fooBarEntry.subject, "commit1");
+
+    // filter by commit date greater than that of the first commit, only second commit should match
+    const log2 = await git.logParse(undefined, {
+      after: addToDate(fooBarEntry.committerDate, { seconds: 1 }),
+      grep: "foo",
+      fixedStrings: true,
+    });
+    assertDeepEqual(log2.length, 1);
+    assertDeepEqual(log2[0].subject, "commit2");
   }),
 );

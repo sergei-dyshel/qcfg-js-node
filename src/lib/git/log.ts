@@ -8,7 +8,23 @@ type FieldType<T extends string> = T extends `${string}Date` ? Date : string;
 export type Entry = { [K in keyof typeof LOG_FORMAT]: FieldType<K> };
 
 export interface LogOptions {
+  /** Limit the number of commits to output. */
   maxCount?: number;
+
+  /** Commit message matches pattern */
+  grep?: string;
+
+  /**
+   * Consider the limiting patterns to be fixed strings (don’t interpret pattern as a regular
+   * expression).
+   */
+  fixedStrings?: boolean;
+
+  /** Show commits more recent than a specific date (commit date) */
+  after?: DateArgType;
+
+  /** Show commits older than a specific date (commit date) */
+  before?: DateArgType;
 }
 
 /**
@@ -34,8 +50,12 @@ export async function raw(
       format: Cmd.string({ equals: true }),
       date: Cmd.string({ equals: true }),
       maxCount: Cmd.number({ equals: true }),
+      grep: Cmd.string({ equals: true }),
+      fixedStrings: Cmd.boolean(),
+      after: Cmd.string({ equals: true }),
+      before: Cmd.string({ equals: true }),
     }),
-    options,
+    { ...options, after: convertDate(options?.after), before: convertDate(options?.before) },
   );
 }
 
@@ -53,6 +73,7 @@ export async function parse(
       nullTerminated: true,
     })
   ).stdout!;
+  if (output === "") return [];
   return output.split("\0").map((commitOut) => {
     const fields = commitOut.split("\x01");
     assert(
@@ -76,3 +97,10 @@ const LOG_FORMAT = {
   committerEmail: "%ce",
   committerDate: "%cI",
 } as const;
+
+type DateArgType = string | Date;
+
+function convertDate(date?: DateArgType) {
+  if (date === undefined && typeof date === "string") return date;
+  return date?.toString();
+}
