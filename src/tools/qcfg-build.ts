@@ -23,7 +23,7 @@ import {
   restArgs,
   runCli,
 } from "../lib/oclif";
-import { stripExt } from "../lib/path";
+import { relPath, stripExt } from "../lib/path";
 import { shlex } from "../lib/shlex";
 import { run } from "../lib/subprocess";
 export { allOclifCommands, OclifHelp };
@@ -231,6 +231,9 @@ class Target {
   /** Output filename without '.js' extension (will be appended later if needed) */
   outNoExt: string;
 
+  /** Esbuild generates sourcemap with source paths relative to this dir */
+  sourceRoot: string;
+
   constructor(
     src: string,
     private readonly options: {
@@ -250,6 +253,9 @@ class Target {
 
     // path of output file
     const outPath = relative(process.cwd(), join(options.cwd, OUT_DIR, srcRelPath));
+
+    // this is the directory where esbuild would write files if it was given "write: true"
+    this.sourceRoot = dirname(join(options.cwd, OUT_DIR, srcRelPath));
 
     this.outNoExt =
       basename(this.entrypoint) === DEFAULT_MAIN_FILE ? dirname(outPath) : stripExt(outPath);
@@ -323,8 +329,17 @@ class Target {
     if (this.options.executable) {
       await chmod(this.out, 0o755);
     }
-    // must preserve sourcemap filename that was written in output file by esbuild
-    await writeFile(this.outNoExt + ".js.map", sourceMap.contents);
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const sourceMapJson = JSON.parse(sourceMap.text);
+
+    // rebase source paths to actual dir of written source map file
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
+    sourceMapJson.sources = sourceMapJson.sources.map((path: string) => {
+      const absPath = join(this.sourceRoot, path);
+      return relPath(dirname(this.out), absPath);
+    });
+    await writeFile(this.outNoExt + ".js.map", JSON.stringify(sourceMapJson));
 
     const metafileName = this.outNoExt + ".metafile.json";
     writeFileSync(metafileName, JSON.stringify(metafile, null, 2));
@@ -381,7 +396,6 @@ async function createEsbuildContext(
     // files are not realy written there
     outdir: OUT_DIR,
     outbase: SRC_DIR,
-    sourceRoot: SRC_DIR,
     entryNames: "[dir]/[name]",
     banner: options.vscodeExt
       ? undefined
