@@ -9,6 +9,11 @@ export type { Argv, InferredOptionTypes } from "yargs";
 /** Create default yargs instance */
 export function create(options?: {
   /**
+   * Use commands (true by default)
+   */
+  commands?: boolean;
+
+  /**
    * Should parsing stop at the first text argument? This is similar to how e.g. ssh parses its
    * command line. Default is `false`
    */
@@ -41,9 +46,11 @@ export function create(options?: {
     "hide-types": true,
   }) as yargs.Argv;
 
+  if (options?.commands ?? true) {
+    y = y.demandCommand().recommendCommands();
+  }
+
   y = y
-    .demandCommand()
-    .recommendCommands()
     .strict()
     // .usageConfiguration({'hide-types': true})
     .parserConfiguration({
@@ -90,7 +97,7 @@ export const options = extendsType<Record<string, yargs.Options>>();
 
 /** Verbosity options that can be used multiple times */
 export const verbose = options({
-  verbose: { type: "boolean", alias: "v", count: true },
+  verbose: { type: "boolean", alias: "v", count: true, describe: "Verbosity level" },
 });
 
 export function addVerbose<T>(yargs: yargs.Argv<T>, options?: { baseLogLevel?: LogLevel }) {
