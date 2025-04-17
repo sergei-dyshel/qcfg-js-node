@@ -67,6 +67,7 @@ export interface SubprocessRunOptions {
     /** Redirect stderr to stdout */
     | "stdout";
 
+  allowedExitSignals?: NodeJS.Signals[];
   allowedExitCodes?: number[];
   /** Raise error if process exits with non-allowed exit code */
   check?: boolean;
@@ -121,7 +122,8 @@ export class RunResult {
 
   check() {
     if (
-      this.signalCode != null ||
+      (this.signalCode != null &&
+        !(this.options?.allowedExitSignals ?? []).includes(this.signalCode)) ||
       (this.exitCode !== null && !(this.options?.allowedExitCodes ?? [0]).includes(this.exitCode))
     ) {
       this.options?.signal?.throwIfAborted();
