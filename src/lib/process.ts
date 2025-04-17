@@ -1,13 +1,13 @@
-import type { Awaitable } from "@sergei-dyshel/typescript/types";
-import { setTimeout as setTimeoutPromise } from "timers/promises";
+import { errorCausedBy } from "@sergei-dyshel/typescript/error";
+import { type Awaitable, type ElementType, extendsType } from "@sergei-dyshel/typescript/types";
+import { isAbortError } from "./abort-signal";
+import { AsyncContext } from "./async-context";
+
+const SIGNALS = extendsType<NodeJS.Signals[]>()(["SIGTERM", "SIGINT"]);
+
+type SignalsType = ElementType<typeof SIGNALS>;
 
 export namespace OnTerminate {
-  export class Error extends global.Error {
-    constructor(signal: string) {
-      super(`Received ${signal}, exiting...`);
-    }
-  }
-
   const controller = new AbortController();
   let installed = false;
 
@@ -19,27 +19,27 @@ export namespace OnTerminate {
     controller.abort(signal);
   }
 
+  /**
+   * Install signal handlers and add {@link AbortSignal} to async context
+   */
   export function install() {
     if (installed) return;
-    process.on("SIGTERM", handler);
-    process.on("SIGINT", handler);
+    for (const signal of SIGNALS) process.on(signal, handler);
+    AsyncContext.enterWith(AsyncContext.addSignal(signal()));
     installed = true;
   }
 
-  export function check() {
-    if (controller.signal.aborted) {
-      throw new Error(controller.signal.reason as string);
-    }
-  }
-
-  export async function setTimeout<T = void>(delay: number, value?: T) {
-    check();
-    try {
-      return await setTimeoutPromise(delay, value, { signal: signal() });
-    } catch (err: unknown) {
-      if ((err as Error).name === "AbortError") check();
-      throw err;
-    }
+  /**
+   * Whether error was caused by {@link AbortSignal}
+   */
+  export function causedBySignal(err: unknown) {
+    return errorCausedBy(err, (err) =>
+      isAbortError(err) &&
+      typeof err.cause === "string" &&
+      SIGNALS.includes(err.cause as SignalsType)
+        ? (err.cause as SignalsType)
+        : undefined,
+    );
   }
 }
 

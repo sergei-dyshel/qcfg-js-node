@@ -1,5 +1,12 @@
+import "@sergei-dyshel/typescript/shims";
+
+import { normalizeArray } from "@sergei-dyshel/typescript/array";
+import type { Arrayable, Awaitable } from "@sergei-dyshel/typescript/types";
 import { AsyncLocalStorage } from "async_hooks";
-import { Writable } from "stream";
+import { Writable } from "node:stream";
+import type { TimerOptions } from "node:timers";
+import { setTimeout as setTimeoutPromise } from "node:timers/promises";
+import { anyAbortSignal } from "./abort-signal";
 import { LineBufferedTransform, type LineTransformFunc } from "./stream";
 
 export interface AsyncContext {
@@ -7,6 +14,8 @@ export interface AsyncContext {
 
   stdout?: Writable;
   stderr?: Writable;
+
+  signal?: AbortSignal;
 }
 
 const asyncContext = new AsyncLocalStorage<AsyncContext>();
@@ -49,6 +58,10 @@ export namespace AsyncContext {
     return get().stderr ?? process.stderr;
   }
 
+  export function getSignal() {
+    return get().signal;
+  }
+
   /**
    * Dynamically translates to {@link AsyncContext.stdout} if defined or to `process.stdout`}
    */
@@ -60,57 +73,116 @@ export namespace AsyncContext {
   export const stderr = new WritableProxy(() => get().stderr ?? process.stderr);
 
   /**
-   * Run function in async context.
-   *
-   * Similar to {@link AsyncLocalStorage.run} but inherits all unspecified context properties from
-   * current context.
+   * Replacement for promisified version of {@link setTimeoutPromise} that respects current context's
+   * {@link AbortSignal}
    */
-  export function run<R>(context: AsyncContext, callback: () => R): R {
-    return asyncContext.run({ ...get(), ...context }, callback);
+  export async function setTimeout<T = void>(delay: number, value?: T, options?: TimerOptions) {
+    return await setTimeoutPromise(delay, value, {
+      ...options,
+      signal: anyAbortSignal(getSignal(), options?.signal),
+    });
   }
 
   /**
-   * Run function in async context and transform all output to stdout/stderr with given functions
-   * with line-buffering.
+   * Run function in async context.
+   *
+   * Similar to {@link AsyncLocalStorage.run} but instead full context object recives series of
+   * modifying functions.
    */
-  export async function transformStd<R>(
-    callback: () => Promise<R>,
-    options?: {
-      /**
-       * Line transformation function for stdout.
-       */
-      stdout?: LineTransformFunc;
-      /**
-       * Line transformation function for stderr.
-       *
-       * When `null`, use same function as for stdout.
-       */
-      stderr?: LineTransformFunc | null;
-    },
-  ) {
-    const stdout = new LineBufferedTransform(options?.stdout, { forceEndingEOL: true });
-    stdout.pipe(getStdout(), { end: false });
-
-    const stderr = new LineBufferedTransform(
-      options?.stderr === null ? options.stdout : options?.stderr,
-      {
-        forceEndingEOL: true,
-      },
-    );
-    stderr.pipe(getStderr(), { end: false });
-
-    try {
-      return await run({ stdout, stderr }, callback);
-    } finally {
-      stdout.end();
-      stderr.end();
+  export async function run<R>(modifiers: Modifier | Modifier[] | undefined, callback: () => R) {
+    let context: AsyncContext = get();
+    await using stack = new AsyncDisposableStack();
+    for (const modifier of normalizeArray(modifiers)) {
+      const [override, onDispose] = modifier(context);
+      if (onDispose) stack.defer(onDispose);
+      context = { ...context, ...override };
     }
+
+    // await is needed so that DisposableStack callbacks do not run too early
+    // eslint-disable-next-line @typescript-eslint/await-thenable
+    return await asyncContext.run(context, callback);
   }
 
-  export async function prefixStd<R>(prefix: string, callback: () => Promise<R>) {
-    return transformStd(callback, {
+  /**
+   * Modify async context for the rest of execution (see {@link AsyncLocalStorage.enterWith})
+   *
+   * Must be used with caution, prefer {@link AsyncContext.run}.
+   */
+  export function enterWith(modifiers: Arrayable<SimpleModifier>) {
+    let context: AsyncContext = get();
+    for (const modifier of normalizeArray(modifiers)) {
+      const [override] = modifier(context);
+      context = { ...context, ...override };
+    }
+    asyncContext.enterWith(context);
+  }
+
+  /**
+   * {@link AsyncContext} modifying function that can optional return a dispose callback.
+   *
+   * For use with {@link AsyncContext.run}
+   */
+  export type Modifier = (
+    _: AsyncContext,
+  ) => [override: AsyncContext, onDispose?: () => Awaitable<void>];
+
+  /**
+   * {@link AsyncContext} modifying function without dispose callback.
+   *
+   * For use with {@link AsyncContext.run} or {@link AsyncContext.enterWith}
+   */
+  export type SimpleModifier = (_: AsyncContext) => [override: AsyncContext];
+
+  /**
+   * Transform all output to stdout/stderr by given functions with line-buffering.
+   */
+  export function transformStd(options?: {
+    /**
+     * Line transformation function for stdout.
+     */
+    stdout?: LineTransformFunc;
+    /**
+     * Line transformation function for stderr.
+     *
+     * When `null`, use same function as for stdout.
+     */
+    stderr?: LineTransformFunc | null;
+  }): Modifier {
+    return () => {
+      const stdout = new LineBufferedTransform(options?.stdout, { forceEndingEOL: true });
+      stdout.pipe(getStdout(), { end: false });
+
+      const stderr = new LineBufferedTransform(
+        options?.stderr === null ? options.stdout : options?.stderr,
+        {
+          forceEndingEOL: true,
+        },
+      );
+      stderr.pipe(getStderr(), { end: false });
+      return [
+        { stdout, stderr },
+        () => {
+          stdout.end();
+          stderr.end();
+        },
+      ];
+    };
+  }
+
+  /**
+   * Prefix stdout/stderr with some string
+   */
+  export function prefixStd(prefix: string): Modifier {
+    return transformStd({
       stdout: (line) => prefix + line,
       stderr: null,
     });
+  }
+
+  /**
+   * Add {@link AbortSignal} to context (merges with existing signals).
+   */
+  export function addSignal(signal?: AbortSignal): SimpleModifier {
+    return (context) => [{ signal: anyAbortSignal(context.signal, signal) }];
   }
 }

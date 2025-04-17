@@ -42,8 +42,8 @@ type Options = Yargs.InferredOptionTypes<typeof yargsOptions>;
 async function runWorker(args: Options) {
   for (;;) {
     await run([process.argv[1], "--config", CONFIG], {
+      stdin: "ignore", // prevent child process catching Ctrl-C
       check: true,
-      signal: OnTerminate.signal(),
       timeout: args.kill ? randomInt(args.kill) : undefined,
       killSignal: "SIGKILL",
       allowedExitSignals: ["SIGKILL"],
@@ -52,16 +52,29 @@ async function runWorker(args: Options) {
   }
 }
 
-async function runProcesses(args: Options) {
+async function runMulti(args: Options) {
   const nrProcesses = args.processes;
   args.processes = 1;
   await writeFile(CONFIG, JSON.stringify(args));
 
   await mapAsync(Array.from(Iterator.range(nrProcesses)), (i) =>
-    AsyncContext.prefixStd(`worker${i}\t`, () => runWorker(args)),
+    AsyncContext.run(AsyncContext.prefixStd(`worker${i}\t`), () => runWorker(args)),
   );
 }
 
+async function runSingle(args: Options) {
+  await using lockfile = new LockFile(PATH);
+  for (;;) {
+    logger.debug("Locking");
+    await lockfile.lock({ timeoutMs: args.timeout });
+    await AsyncContext.setTimeout(randomInt(args.interval));
+
+    logger.debug("Unlocking");
+    await lockfile.unlock({ verify: true });
+
+    await AsyncContext.setTimeout(randomInt(args.interval));
+  }
+}
 async function main() {
   const args = Yargs.create({ commands: false, completion: false })
     .options(yargsOptions)
@@ -72,20 +85,17 @@ async function main() {
   configureLogging({ handler: { level: LogLevels.addVerbosity(LogLevel.WARNING, args.verbose) } });
   OnTerminate.install();
 
-  if (args.processes > 1) {
-    return runProcesses(args);
-  }
-
-  await using lockfile = new LockFile(PATH);
-  for (;;) {
-    logger.debug("Locking");
-    await lockfile.lock({ timeoutMs: args.timeout });
-    await OnTerminate.setTimeout(randomInt(args.interval));
-
-    logger.debug("Unlocking");
-    await lockfile.unlock({ verify: true });
-
-    await OnTerminate.setTimeout(randomInt(args.interval));
+  try {
+    if (args.processes > 1) {
+      await runMulti(args);
+    } else {
+      await runSingle(args);
+    }
+  } catch (err) {
+    const signal = OnTerminate.causedBySignal(err);
+    if (signal) {
+      process.kill(process.pid, signal);
+    }
   }
 }
 

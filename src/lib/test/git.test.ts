@@ -199,7 +199,7 @@ void test(
   }),
 );
 
-void test.only(
+void test(
   "git log filtering",
   gitTest(async (options) => {
     const git = new Git.Instance(options);

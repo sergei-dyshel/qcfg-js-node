@@ -1,7 +1,8 @@
+import "@sergei-dyshel/typescript/shims";
+
 import { normalizeArray } from "@sergei-dyshel/typescript/array";
 import { deepMerge } from "@sergei-dyshel/typescript/deep-merge";
 import { assert } from "@sergei-dyshel/typescript/error";
-import "@sergei-dyshel/typescript/shims";
 import * as Cmd from "./cmdline-builder";
 import { userConfig, type UserConfigType } from "./config";
 import { run, type Runner, type RunOptions } from "./subprocess";

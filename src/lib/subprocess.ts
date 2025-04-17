@@ -28,6 +28,7 @@ import { ReadStream, WriteStream } from "node:fs";
 import { Socket } from "node:net";
 import { PassThrough, Stream, type Readable, type Writable } from "node:stream";
 import * as consumers from "node:stream/consumers";
+import { anyAbortSignal } from "./abort-signal";
 import { AsyncContext } from "./async-context";
 import { LogLevel, RootLogger, type Logger } from "./logging";
 import { shlex } from "./shlex";
@@ -220,8 +221,8 @@ function buildStdio({ input, stdin, stdout, stderr }: RunOptions) {
 
 /** Similar to {@link child_process.spawn} */
 export function spawn(command: Command, options?: RunOptions) {
-  const signal = options?.signal;
-  if (options?.check && options.throwIfAborted) signal?.throwIfAborted();
+  const signal = anyAbortSignal(AsyncContext.get().signal, options?.signal);
+  signal?.throwIfAborted();
 
   const cmd = typeof command === "string" ? command : command[0];
   const args = typeof command === "string" ? [] : command.slice(1);
@@ -233,6 +234,7 @@ export function spawn(command: Command, options?: RunOptions) {
   const stdio = buildStdio(options ?? {});
   const proc = child_process.spawn(cmd, args, {
     ...options,
+    signal,
     stdio: [...stdio], // convert readonly array to mutable
   });
 

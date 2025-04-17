@@ -3,15 +3,13 @@ import { test } from "@sergei-dyshel/typescript/testing";
 import { AsyncContext } from "../async-context";
 import { run } from "../subprocess";
 
-async function prefixOutErr(callback: () => Promise<void>) {
-  return AsyncContext.transformStd(callback, {
-    stdout: (s) => `[stdout] ${s}`,
-    stderr: (s) => `[stderr] ${s}`,
-  });
-}
+const prefixOutErr: AsyncContext.Modifier = AsyncContext.transformStd({
+  stdout: (s) => `[stdout] ${s}`,
+  stderr: (s) => `[stderr] ${s}`,
+});
 
-void test("run inherit stdout/stderr", () =>
-  prefixOutErr(async () => {
+void test("run inherit stdout/stderr", async () =>
+  AsyncContext.run(prefixOutErr, async () => {
     const result = await run(
       "echo 'this should be printed to stdout' && echo 'this should be printed to stderr' >&2",
       {
