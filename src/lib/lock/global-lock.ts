@@ -21,7 +21,7 @@ export class GlobalLock {
     if (this.refCount === 0) {
       await this.releasing;
       if (!this.locking) {
-        this.logger?.debug("Globally locking " + directory);
+        this.logger?.trace("Globally locking " + directory);
         this.locking = lockfile.lock(directory, {
           lockfilePath: join(directory, ".lock"),
           retries: 3,
@@ -38,7 +38,7 @@ export class GlobalLock {
       assert(this.refCount >= 0);
       if (this.refCount === 0) {
         if (!this.releasing) {
-          this.logger?.debug("Releasing global lock on " + directory);
+          this.logger?.trace("Releasing global lock on " + directory);
           this.releasing = this.release!();
           this.release = undefined;
         }
