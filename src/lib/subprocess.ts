@@ -76,13 +76,23 @@ export interface SubprocessRunOptions {
 
 export type RunOptions = SpawnOptionsWithoutStdio & SubprocessRunOptions & { log?: RunLogOptions };
 
+/**
+ * Error when spawning process.
+ *
+ * According to {@link https://nodejs.org/api/child_process.html#event-error} this can happen if:
+ *
+ * - The process could not be spawned.
+ * - The process could not be killed.
+ * - Sending a message to the child process failed.
+ * - The child process was aborted via the signal option.
+ */
 export class SpawnError extends Error {
   constructor(
     public readonly command: Command,
     public readonly options: RunOptions | undefined,
     err: unknown,
   ) {
-    super("Unable to spawn process", { cause: err });
+    super("Spawning process failed", { cause: err });
   }
 }
 
