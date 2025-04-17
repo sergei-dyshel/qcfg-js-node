@@ -1,5 +1,5 @@
 import { assertDeepEqual } from "@sergei-dyshel/typescript/error";
-import { test } from "@sergei-dyshel/typescript/testing";
+import { suite, test } from "@sergei-dyshel/typescript/testing";
 import * as Cmd from "../cmdline-builder";
 
 const schema = Cmd.schema({
@@ -67,4 +67,54 @@ void test("string argument with equals sign", () => {
     ),
     ["--string-flag=value"],
   );
+});
+
+void suite.only("count argument", () => {
+  void test("count argument with full name", () => {
+    assertDeepEqual(
+      Cmd.build(
+        Cmd.schema({
+          countFlag: Cmd.count(),
+        }),
+        { countFlag: 3 },
+      ),
+      ["--count-flag", "--count-flag", "--count-flag"],
+    );
+  });
+
+  void test("count argument with char", () => {
+    assertDeepEqual(
+      Cmd.build(
+        Cmd.schema({
+          countFlag: Cmd.count({ char: "v" }),
+        }),
+        { countFlag: 3 },
+      ),
+      ["-vvv"],
+    );
+  });
+
+  void test("zero count (long opt)", () => {
+    assertDeepEqual(
+      Cmd.build(
+        Cmd.schema({
+          countFlag: Cmd.count(),
+        }),
+        { countFlag: 0 },
+      ),
+      [],
+    );
+  });
+
+  void test("zero count (short opt)", () => {
+    assertDeepEqual(
+      Cmd.build(
+        Cmd.schema({
+          countFlag: Cmd.count({ char: "v" }),
+        }),
+        { countFlag: 0 },
+      ),
+      [],
+    );
+  });
 });

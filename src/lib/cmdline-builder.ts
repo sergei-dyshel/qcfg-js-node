@@ -71,6 +71,10 @@ export function number(options?: CommonArgOptions): Handler<number> {
   return (name, value) => (value ? emitArg(name, value.toString(), options) : []);
 }
 
+export function count(options?: CountOptions): Handler<number> {
+  return (name, value) => (value ? emitCount(name, value, options) : []);
+}
+
 export function build<S extends Schema>(schema?: S, data?: Data<S>): string[] {
   if (!data) return [];
   return Object.entries(schema ?? {}).flatMap(([name, handler]) =>
@@ -136,4 +140,17 @@ function emitBool(name: string, value?: boolean, options?: BooleanOptions) {
   const val = value ?? options?.default ?? false;
   const emitOnVal = options?.invert ?? false;
   return val != emitOnVal ? [emitName(name, options, prefix)] : [];
+}
+
+interface CountOptions {
+  /** Single character that should be output as `-vvv` */
+  char?: string;
+}
+
+function emitCount(name: string, count: number, options?: CountOptions) {
+  return options?.char
+    ? count > 0
+      ? ["-" + options.char.repeat(count)]
+      : []
+    : Array<string>(count).fill(emitName(name));
 }
