@@ -1,4 +1,5 @@
 export { UserConfig } from "./config";
+export * from "./error";
 export * from "./process";
 export { shlex } from "./shlex";
 export * as Ssh from "./ssh";
