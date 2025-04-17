@@ -3,7 +3,9 @@ import type { Awaitable } from "@sergei-dyshel/typescript/types";
 import { type ChokidarOptions, type FSWatcher, watch } from "chokidar";
 import type { EventName } from "chokidar/handler.js";
 import * as fs from "node:fs";
-import { lstat } from "node:fs/promises";
+import { constants, lstat, open, rename, rm } from "node:fs/promises";
+import { AsyncContext } from "./async-context";
+import { randomAlphaNumChars } from "./random";
 
 export { emptyDir, pathExists as exists } from "fs-extra";
 
@@ -48,6 +50,34 @@ export function isFileSync(path: string) {
     const errno = err as NodeJS.ErrnoException;
     if (errno.code === "ENOENT") return false;
     throw err;
+  }
+}
+
+/**
+ * Write file atomically, by first writing to temprary file and then renaming it (atomically)
+ */
+export async function writeFileAtomic(
+  path: string,
+  data: string | Uint8Array,
+  options?: {
+    mtime?: Date;
+  },
+) {
+  const tempPath = path + ".tmp." + randomAlphaNumChars(8);
+  try {
+    const file = await open(tempPath, constants.O_EXCL | constants.O_CREAT);
+    try {
+      await file.writeFile(data, { signal: AsyncContext.getSignal() });
+      await file.sync();
+      if (options?.mtime) {
+        await file.utimes(options.mtime, options.mtime);
+      }
+    } finally {
+      await file.close();
+    }
+    await rename(tempPath, path);
+  } finally {
+    await rm(tempPath, { force: true });
   }
 }
 

@@ -3,6 +3,7 @@ export * from "./async-context";
 export { UserConfig } from "./config";
 export * from "./error";
 export * from "./process";
+export * from "./random";
 export { shlex } from "./shlex";
 export * as Ssh from "./ssh";
 export * as Subprocess from "./subprocess";
