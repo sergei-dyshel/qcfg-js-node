@@ -2,7 +2,10 @@ import { assert } from "@sergei-dyshel/typescript/error";
 import { Path, split } from "./path";
 
 interface Tree<T> {
+  /** Name (last segment of path) of this tree node */
   name: string;
+
+  /** Full path to this tree node */
   path: string;
 
   // exactly one of these will be present
@@ -19,7 +22,25 @@ function buildTrees<T>(files: [path: string, obj: T][]): Tree<T>[] {
     );
     addPath(trees, split(path), obj);
   }
+  coalesceFolders(trees);
   return trees;
+}
+
+/** When folder has only one subfolder, join their names */
+function coalesceFolders<T>(trees: Tree<T>[]) {
+  for (const tree of trees) {
+    if (!tree.children) continue;
+    coalesceFolders(tree.children);
+    if (tree.children.length === 1) {
+      const child = tree.children[0];
+      if (child.children) {
+        tree.name = [tree.name, child.name].join(Path.sep);
+        tree.path = [tree.path, child.name].join(Path.sep);
+        tree.obj = child.obj;
+        tree.children = child.children;
+      }
+    }
+  }
 }
 
 function addPath<T>(trees: Tree<T>[], segments: string[], obj: T, parentPath?: string) {
