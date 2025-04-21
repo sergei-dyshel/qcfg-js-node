@@ -7,6 +7,7 @@ import { Writable } from "node:stream";
 import type { TimerOptions } from "node:timers";
 import { setTimeout as setTimeoutPromise } from "node:timers/promises";
 import { anyAbortSignal } from "./abort-signal";
+import { addMaxListeners } from "./misc";
 import { LineBufferedTransform, type LineTransformFunc } from "./stream";
 
 export interface AsyncContext {
@@ -134,6 +135,11 @@ export namespace AsyncContext {
   export type SimpleModifier = (_: AsyncContext) => [override: AsyncContext];
 
   /**
+   * Identity modifier - passes same context without modifications
+   */
+  export const identity: SimpleModifier = (ctx: AsyncContext) => [ctx];
+
+  /**
    * Transform all output to stdout/stderr by given functions with line-buffering.
    */
   export function transformStd(options?: {
@@ -148,12 +154,19 @@ export namespace AsyncContext {
      */
     stderr?: LineTransformFunc | null;
   }): Modifier {
+    if (options?.stdout === undefined && options?.stderr === undefined) return identity;
+
     return () => {
-      const stdout = new LineBufferedTransform(options?.stdout, { forceEndingEOL: true });
+      // when runng in multiple workers in parallel, each one adds listeners to stdout/stderr
+      // adjust max listeners to avoid the warning
+      addMaxListeners(getStdout(), 1);
+      addMaxListeners(getStderr(), 1);
+
+      const stdout = new LineBufferedTransform(options.stdout, { forceEndingEOL: true });
       stdout.pipe(getStdout(), { end: false });
 
       const stderr = new LineBufferedTransform(
-        options?.stderr === null ? options.stdout : options?.stderr,
+        options.stderr === null ? options.stdout : options.stderr,
         {
           forceEndingEOL: true,
         },
@@ -172,7 +185,9 @@ export namespace AsyncContext {
   /**
    * Prefix stdout/stderr with some string
    */
-  export function prefixStd(prefix: string): Modifier {
+  export function prefixStd(prefix?: string): Modifier {
+    if (prefix === undefined || prefix === "") return identity;
+
     return transformStd({
       stdout: (line) => prefix + line,
       stderr: null,
