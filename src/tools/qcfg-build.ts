@@ -182,6 +182,9 @@ export class RunCommand extends RootCommand {
       description: "Run in debug mode (--inspect-brk)",
       char: "d",
     }),
+    traceWarnings: Flags.boolean({
+      description: "Pass --trace-warning to Node",
+    }),
   });
 
   static override args = argsInput({
@@ -216,6 +219,7 @@ export class RunCommand extends RootCommand {
 
     const cmd = ["node", ...getRunNodeArgs(this.flags)];
     if (this.flags.debug) cmd.push("--inspect-brk");
+    if (this.flags.traceWarnings) cmd.push("--trace-warnings");
     const fullCmd = [...cmd, target.out, ...this.argv];
     logger.info("Running: ", shlex.join(fullCmd));
     const result = await run(fullCmd);
