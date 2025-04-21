@@ -1,9 +1,10 @@
 import { assertDeepEqual } from "@sergei-dyshel/typescript/error";
 import { test } from "@sergei-dyshel/typescript/testing";
 import { AsyncContext } from "../async-context";
+import { transformStd } from "../stream";
 import { run } from "../subprocess";
 
-const prefixOutErr: AsyncContext.Modifier = AsyncContext.transformStd({
+const prefixOutErr: AsyncContext.Modifier = transformStd({
   stdout: (s) => `[stdout] ${s}`,
   stderr: (s) => `[stderr] ${s}`,
 });

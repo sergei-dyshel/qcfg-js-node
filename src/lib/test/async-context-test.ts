@@ -12,13 +12,14 @@ import { randomInt } from "node:crypto";
 import { EOL } from "node:os";
 import { setTimeout } from "node:timers/promises";
 import { AsyncContext } from "../async-context";
+import { transformStd } from "../stream";
 
 const prefixes = ["one", "two", "three"];
 
 async function main() {
   await mapAsync(prefixes, async (prefix) =>
     AsyncContext.run(
-      AsyncContext.transformStd({
+      transformStd({
         stdout: (line) => `[stdout:${prefix}] ${line}`,
         stderr: (line) => `[stderr:${prefix}] ${line}`,
       }),

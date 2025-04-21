@@ -8,6 +8,7 @@ import { EOL } from "node:os";
 import { Transform, type TransformCallback } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { AsyncContext } from "./async-context";
+import { addMaxListeners } from "./misc";
 
 export async function concatenateStreams(
   readables: Iterable<NodeJS.ReadableStream>,
@@ -111,4 +112,59 @@ export class LineBufferedTransform extends Transform {
       callback(err as Error);
     }
   }
+}
+
+/**
+ * Transform all output to stdout/stderr by given functions with line-buffering.
+ */
+export function transformStd(options?: {
+  /**
+   * Line transformation function for stdout.
+   */
+  stdout?: LineTransformFunc;
+  /**
+   * Line transformation function for stderr.
+   *
+   * When `null`, use same function as for stdout.
+   */
+  stderr?: LineTransformFunc | null;
+}): AsyncContext.Modifier {
+  if (options?.stdout === undefined && options?.stderr === undefined) return AsyncContext.identity;
+
+  return () => {
+    // when runng in multiple workers in parallel, each one adds listeners to stdout/stderr
+    // adjust max listeners to avoid the warning
+    addMaxListeners(AsyncContext.getStdout(), 1);
+    addMaxListeners(AsyncContext.getStderr(), 1);
+
+    const stdout = new LineBufferedTransform(options.stdout, { forceEndingEOL: true });
+    stdout.pipe(AsyncContext.getStdout(), { end: false });
+
+    const stderr = new LineBufferedTransform(
+      options.stderr === null ? options.stdout : options.stderr,
+      {
+        forceEndingEOL: true,
+      },
+    );
+    stderr.pipe(AsyncContext.getStderr(), { end: false });
+    return [
+      { stdout, stderr },
+      () => {
+        stdout.end();
+        stderr.end();
+      },
+    ];
+  };
+}
+
+/**
+ * Prefix stdout/stderr with some string
+ */
+export function prefixStd(prefix?: string): AsyncContext.Modifier {
+  if (prefix === undefined || prefix === "") return AsyncContext.identity;
+
+  return transformStd({
+    stdout: (line) => prefix + line,
+    stderr: null,
+  });
 }

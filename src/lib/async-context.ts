@@ -7,8 +7,6 @@ import { Writable } from "node:stream";
 import type { TimerOptions } from "node:timers";
 import { setTimeout as setTimeoutPromise } from "node:timers/promises";
 import { anyAbortSignal } from "./abort-signal";
-import { addMaxListeners } from "./misc";
-import { LineBufferedTransform, type LineTransformFunc } from "./stream";
 
 export interface AsyncContext {
   parallel?: boolean;
@@ -138,61 +136,6 @@ export namespace AsyncContext {
    * Identity modifier - passes same context without modifications
    */
   export const identity: SimpleModifier = (ctx: AsyncContext) => [ctx];
-
-  /**
-   * Transform all output to stdout/stderr by given functions with line-buffering.
-   */
-  export function transformStd(options?: {
-    /**
-     * Line transformation function for stdout.
-     */
-    stdout?: LineTransformFunc;
-    /**
-     * Line transformation function for stderr.
-     *
-     * When `null`, use same function as for stdout.
-     */
-    stderr?: LineTransformFunc | null;
-  }): Modifier {
-    if (options?.stdout === undefined && options?.stderr === undefined) return identity;
-
-    return () => {
-      // when runng in multiple workers in parallel, each one adds listeners to stdout/stderr
-      // adjust max listeners to avoid the warning
-      addMaxListeners(getStdout(), 1);
-      addMaxListeners(getStderr(), 1);
-
-      const stdout = new LineBufferedTransform(options.stdout, { forceEndingEOL: true });
-      stdout.pipe(getStdout(), { end: false });
-
-      const stderr = new LineBufferedTransform(
-        options.stderr === null ? options.stdout : options.stderr,
-        {
-          forceEndingEOL: true,
-        },
-      );
-      stderr.pipe(getStderr(), { end: false });
-      return [
-        { stdout, stderr },
-        () => {
-          stdout.end();
-          stderr.end();
-        },
-      ];
-    };
-  }
-
-  /**
-   * Prefix stdout/stderr with some string
-   */
-  export function prefixStd(prefix?: string): Modifier {
-    if (prefix === undefined || prefix === "") return identity;
-
-    return transformStd({
-      stdout: (line) => prefix + line,
-      stderr: null,
-    });
-  }
 
   /**
    * Add {@link AbortSignal} to context (merges with existing signals).

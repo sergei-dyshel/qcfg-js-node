@@ -18,6 +18,7 @@ import { Git } from "./git";
 import { ModuleLogger } from "./logging";
 import { absPath, pathJoin, relPath } from "./path";
 import { rsync, type RsyncOptions } from "./rsync";
+import { prefixStd } from "./stream";
 import type { Command } from "./subprocess";
 
 /**
@@ -363,9 +364,7 @@ export class Syg {
     const maxRemoteLen = Math.max(...remotesToSync.map((r) => r.length));
     const results = await mapAsync(remotesToSync, (remote) =>
       AsyncContext.run(
-        remotesToSync.length > 1
-          ? AsyncContext.prefixStd(`{${remote}}`.padEnd(maxRemoteLen + 6))
-          : undefined,
+        remotesToSync.length > 1 ? prefixStd(`{${remote}}`.padEnd(maxRemoteLen + 6)) : undefined,
         () => this.internalSync(remote, expectedRemoteHead),
       ),
     );

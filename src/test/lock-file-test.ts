@@ -16,6 +16,7 @@ import { writeFile } from "node:fs/promises";
 import { AsyncContext } from "../lib/async-context";
 import { LockFile } from "../lib/lock/lock-file";
 import { configureLogging, LogLevel, LogLevels, RootLogger } from "../lib/logging";
+import { prefixStd } from "../lib/stream";
 import { run } from "../lib/subprocess";
 
 const logger = RootLogger.get();
@@ -58,7 +59,7 @@ async function runMulti(args: Options) {
   await writeFile(CONFIG, JSON.stringify(args));
 
   await mapAsync(Array.from(Iterator.range(nrProcesses)), (i) =>
-    AsyncContext.run(AsyncContext.prefixStd(`worker${i}\t`), () => runWorker(args)),
+    AsyncContext.run(prefixStd(`worker${i}\t`), () => runWorker(args)),
   );
 }
 
