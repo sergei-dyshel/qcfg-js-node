@@ -1,7 +1,9 @@
 export * from "./abort-signal";
 export * from "./async-context";
 export { UserConfig } from "./config";
+export * from "./disposable";
 export * from "./error";
+export * from "./misc";
 export * from "./process";
 export * from "./random";
 export { shlex } from "./shlex";
