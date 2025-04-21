@@ -6,6 +6,17 @@
 
 import { EOL } from "node:os";
 import { Transform, type TransformCallback } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import { AsyncContext } from "./async-context";
+
+export async function concatenateStreams(
+  readables: Iterable<NodeJS.ReadableStream>,
+  writable: NodeJS.WritableStream,
+): Promise<void> {
+  for (const readable of readables) {
+    await pipeline(readable, writable, { signal: AsyncContext.getSignal(), end: false });
+  }
+}
 
 export function writeStream(stream: NodeJS.WritableStream, buffer: Uint8Array | string) {
   return new Promise<void>((resolve, reject) => {
