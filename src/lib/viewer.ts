@@ -12,7 +12,8 @@ import { TempDirectory } from "./tempDirectory";
 
 const logger = new ModuleLogger();
 
-const NO_VIEWER = "-";
+// REFACTOR: move all stuff into Output
+export const NO_VIEWER = "-";
 
 export async function getDefaultViewer() {
   return (await userConfig.get()).viewer;
@@ -20,7 +21,6 @@ export async function getDefaultViewer() {
 
 export function openViewer(path: string, viewer: string) {
   if (viewer === NO_VIEWER) {
-    logger.debug("Not opening any viewer");
     return;
   }
   const cmdStr = viewer;
@@ -36,11 +36,13 @@ export function openViewer(path: string, viewer: string) {
  * through filter/transformer command
  */
 export class Output implements AsyncDisposable {
+  static readonly NO_OUTPUT = "-";
+
   readonly stream: NodeJS.WritableStream;
   private readonly viewer?: string;
   private readonly filter?: ChildProcess;
-  private readonly filePath?: string;
-  private readonly file?: FileHandle;
+  readonly filePath?: string;
+  readonly file?: FileHandle;
 
   private firstWrite = true;
 
@@ -60,9 +62,9 @@ export class Output implements AsyncDisposable {
 
   /** Should be called on first output to stream */
   start() {
-    if (this.firstWrite && this.filePath) {
+    if (this.viewer && this.firstWrite && this.filePath) {
       this.firstWrite = false;
-      void openViewer(this.filePath, this.viewer!);
+      void openViewer(this.filePath, this.viewer);
     }
   }
 
@@ -73,12 +75,15 @@ export class Output implements AsyncDisposable {
 
   async dispose() {
     if (this.filter) {
-      this.filter.kill();
+      this.filter.stdin!.end();
       await new Promise((resolve) => {
         this.filter?.on("close", resolve);
       });
     }
-    if (this.file) await this.file.close();
+    if (this.file) {
+      await this.file.sync();
+      await this.file.close();
+    }
   }
 
   static async create(options: {
@@ -93,7 +98,7 @@ export class Output implements AsyncDisposable {
   }): Promise<Output> {
     const viewer = options.viewer ?? (await getDefaultViewer());
     const toStdout =
-      options.output === "-" ||
+      options.output === this.NO_OUTPUT ||
       (options.output === undefined && (!viewer || !process.stdout.isTTY));
 
     let filterProc: ChildProcess | undefined;
@@ -113,11 +118,11 @@ export class Output implements AsyncDisposable {
       let filename: string;
       let dirname: string | undefined = undefined;
       if (options.output) {
-        if (options.output.includes("/")) return options.output;
         if (await isDirectory(options.output)) {
           dirname = options.output;
           filename = options.defaultFilename;
-        } else filename = options.output;
+        } else if (options.output.includes("/")) return options.output;
+        else filename = options.output;
       } else {
         filename = options.defaultFilename;
       }
@@ -127,11 +132,13 @@ export class Output implements AsyncDisposable {
     const file = await open(path, "w");
     // if output filename may be needed by user, increase level
     const fileLogLevel =
-      path === options.output || viewer !== NO_VIEWER ? LogLevel.INFO : LogLevel.WARNING;
+      path === options.output || (viewer && viewer !== NO_VIEWER)
+        ? LogLevel.INFO
+        : LogLevel.WARNING;
     logger.log(fileLogLevel, `Writing to file ${path}`);
     const fileStream = file.createWriteStream();
     if (filterProc) {
-      filterProc.stdout!.pipe(fileStream);
+      filterProc.stdout!.pipe(fileStream, { end: false });
     }
     return new Output(filterProc ? filterProc.stdin! : fileStream, viewer, filterProc, path, file);
   }
