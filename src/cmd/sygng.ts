@@ -22,19 +22,27 @@ export { allOclifCommands, OclifHelp };
 
 const logger = RootLogger.get();
 
-abstract class RootCommand<
-  T extends typeof BaseCommandWithVerbosity,
-> extends BaseCommandWithVerbosity {
-  protected declare flags: CommandFlags<T>;
-  protected declare args: CommandArgs<T>;
+abstract class RootCommand extends BaseCommandWithVerbosity {
+  protected declare flags: CommandFlags<typeof RootCommand>;
+  protected declare args: CommandArgs<typeof RootCommand>;
   syg!: Syg;
-  protected shouldDetect = true;
+
+  static override baseFlags = flagsInput({
+    ...BaseCommandWithVerbosity.baseFlags,
+    silent: Flags.boolean({
+      summary: "Do not fail if not in Syg directory, just silently exit",
+      char: "S",
+    }),
+  });
 
   public override async init() {
     await super.init();
-    if (this.shouldDetect)
+    try {
       this.syg = await Syg.detect({ gitVerbose: (this.flags.verbose ?? 0) >= 2 });
-    else this.syg = new Syg();
+    } catch (err) {
+      if (this.flags.silent && err instanceof Syg.NoSygDir) process.exit();
+      throw err;
+    }
   }
 }
 
@@ -48,20 +56,26 @@ const remotesFlag = flagsInput({
 });
 
 @command("init")
-export class InitCommand extends RootCommand<typeof InitCommand> {
+export class InitCommand extends BaseCommandWithVerbosity {
+  protected declare flags: CommandFlags<typeof InitCommand>;
+  protected declare args: CommandArgs<typeof InitCommand>;
+
   static override summary = "Init syg in current directory";
   static override flags = flagsInput({
     ...Flags.force({ summary: "Recreate syg dir" }),
   });
-  protected override shouldDetect = false;
 
   override async run() {
-    await this.syg.init({ force: this.flags.force });
+    const syg = new Syg();
+    await syg.init({ force: this.flags.force });
   }
 }
 
 @command(["remote", "add"])
-export class RemoteAddCommand extends RootCommand<typeof RemoteAddCommand> {
+export class RemoteAddCommand extends RootCommand {
+  protected declare flags: CommandFlags<typeof RemoteAddCommand>;
+  protected declare args: CommandArgs<typeof RemoteAddCommand>;
+
   static override summary = "Add remote";
   static override description = "Add remote, optionally set it as default ans setup";
 
@@ -109,7 +123,10 @@ export class RemoteAddCommand extends RootCommand<typeof RemoteAddCommand> {
 }
 
 @command(["remote", "set-default"])
-export class RemoteSetDefaultCommand extends RootCommand<typeof RemoteSetDefaultCommand> {
+export class RemoteSetDefaultCommand extends RootCommand {
+  protected declare flags: CommandFlags<typeof RemoteSetDefaultCommand>;
+  protected declare args: CommandArgs<typeof RemoteSetDefaultCommand>;
+
   static override summary = "Set remote as default";
 
   static override args = argsInput({
@@ -125,7 +142,10 @@ export class RemoteSetDefaultCommand extends RootCommand<typeof RemoteSetDefault
 }
 
 @command(["remote", "setup"])
-export class RemoteSetupCommand extends RootCommand<typeof RemoteSetupCommand> {
+export class RemoteSetupCommand extends RootCommand {
+  protected declare flags: CommandFlags<typeof RemoteSetupCommand>;
+  protected declare args: CommandArgs<typeof RemoteSetupCommand>;
+
   static override summary = "Setup remote";
 
   static override args = argsInput({
@@ -142,7 +162,10 @@ export class RemoteSetupCommand extends RootCommand<typeof RemoteSetupCommand> {
 }
 
 @command(["remote", "list"])
-export class RemoteListCommand extends RootCommand<typeof RemoteListCommand> {
+export class RemoteListCommand extends RootCommand {
+  protected declare flags: CommandFlags<typeof RemoteListCommand>;
+  protected declare args: CommandArgs<typeof RemoteListCommand>;
+
   static override summary = "List remotes";
   static override aliases = ["remote:ls"];
 
@@ -158,7 +181,10 @@ export class RemoteListCommand extends RootCommand<typeof RemoteListCommand> {
 }
 
 @command(["remote", "rename"])
-export class RemoteRenameCommand extends RootCommand<typeof RemoteRenameCommand> {
+export class RemoteRenameCommand extends RootCommand {
+  protected declare flags: CommandFlags<typeof RemoteRenameCommand>;
+  protected declare args: CommandArgs<typeof RemoteRenameCommand>;
+
   static override summary = "Rename remote";
   static override description = "Rename remote and preserve default flag";
 
@@ -179,7 +205,10 @@ export class RemoteRenameCommand extends RootCommand<typeof RemoteRenameCommand>
 }
 
 @command(["remote", "dump"])
-export class RemoteDumpCommand extends RootCommand<typeof RemoteDumpCommand> {
+export class RemoteDumpCommand extends RootCommand {
+  protected declare flags: CommandFlags<typeof RemoteDumpCommand>;
+  protected declare args: CommandArgs<typeof RemoteDumpCommand>;
+
   static override aliases = ["remote"];
   static override summary = "Dump information about remote";
 
@@ -231,7 +260,10 @@ export class RemoteDumpCommand extends RootCommand<typeof RemoteDumpCommand> {
 }
 
 @command("sync")
-export class SyncCommand extends RootCommand<typeof SyncCommand> {
+export class SyncCommand extends RootCommand {
+  protected declare flags: CommandFlags<typeof SyncCommand>;
+  protected declare args: CommandArgs<typeof SyncCommand>;
+
   static override summary = "Sync remote(s)";
 
   static override flags = flagsInput({
@@ -251,7 +283,10 @@ export class SyncCommand extends RootCommand<typeof SyncCommand> {
 }
 
 @command("ignore")
-export class IgnoreCommand extends RootCommand<typeof IgnoreCommand> {
+export class IgnoreCommand extends RootCommand {
+  protected declare flags: CommandFlags<typeof IgnoreCommand>;
+  protected declare args: CommandArgs<typeof IgnoreCommand>;
+
   static override summary = "Ignore file(s)";
   static override description = dedent`
     Remote file from syg sync set, i.e. stop synchronizing it with sync command.
@@ -271,7 +306,10 @@ export class IgnoreCommand extends RootCommand<typeof IgnoreCommand> {
 }
 
 @command("git")
-export class GitCommand extends RootCommand<typeof GitCommand> {
+export class GitCommand extends RootCommand {
+  protected declare flags: CommandFlags<typeof GitCommand>;
+  protected declare args: CommandArgs<typeof GitCommand>;
+
   static override summary = "Run arbitrary git command in syg git repo";
   static override description = dedent`
     Properly adds --git-dir and --work-tree options to command.
@@ -285,7 +323,10 @@ export class GitCommand extends RootCommand<typeof GitCommand> {
 }
 
 @command("tool")
-export class ToolCommand extends RootCommand<typeof ToolCommand> {
+export class ToolCommand extends RootCommand {
+  protected declare flags: CommandFlags<typeof ToolCommand>;
+  protected declare args: CommandArgs<typeof ToolCommand>;
+
   static override summary = "Run arbitrary git related tool in syg git repo";
   static override description = dedent`
     Properly sets environment variables GIT_DIR and GIT_WORK_TREE.
@@ -299,7 +340,10 @@ export class ToolCommand extends RootCommand<typeof ToolCommand> {
 }
 
 @command("exec")
-export class ExecCommand extends RootCommand<typeof ExecCommand> {
+export class ExecCommand extends RootCommand {
+  protected declare flags: CommandFlags<typeof ExecCommand>;
+  protected declare args: CommandArgs<typeof ExecCommand>;
+
   static override summary = "Execute shell command on remote";
 
   static override args = restArgs();
@@ -319,7 +363,10 @@ export class ExecCommand extends RootCommand<typeof ExecCommand> {
 }
 
 @command("rsync")
-export class RsyncCommand extends RootCommand<typeof RsyncCommand> {
+export class RsyncCommand extends RootCommand {
+  protected declare flags: CommandFlags<typeof RsyncCommand>;
+  protected declare args: CommandArgs<typeof RsyncCommand>;
+
   static override summary = "Upload/download files to remote using rsync";
   static override args = argsInput({
     files: Args.string({

@@ -91,7 +91,12 @@ export class Syg {
    * Throw error if not found.
    */
   static async detect(options?: Syg.BaseOptions): Promise<Syg> {
-    const root = await Git.RevParse.showToplevel({ cwd: options?.cwd });
+    let root: string;
+    try {
+      root = await Git.RevParse.showToplevel({ cwd: options?.cwd });
+    } catch (err) {
+      throw this.NoSygDir.wrap(err, "Not a git repo");
+    }
     logger.debug(`Git repo root: ${root}`);
     const syg = new Syg({ ...options, root });
     await syg.checkSygGitDir();
@@ -576,8 +581,8 @@ export class Syg {
       await Git.RevParse.resolveGitDir(this.sygGitDir);
     } catch (err) {
       if (err instanceof Git.Error.NotAGitDir)
-        throw Syg.Error.wrap(err, `Not syg dir at ${this.sygGitDir}`);
-      throw Syg.Error.wrap(err, "Not in  git repository");
+        throw Syg.NoSygDir.wrap(err, `Not syg dir at ${this.sygGitDir}`);
+      throw Syg.NoSygDir.wrap(err, "Not in git repository");
     }
   }
 }
@@ -586,9 +591,13 @@ export namespace Syg {
   export class Error extends LoggableError {
     protected static override namePrefix = "Syg.";
   }
+
+  export class NoSygDir extends Error {}
+
   export class InternalError extends Error {
     protected static override namePrefix = "Syg.";
   }
+
   export class NoDefaultRemote extends Error {
     protected static override namePrefix = "Syg.";
   }
