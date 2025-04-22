@@ -67,7 +67,7 @@
     "ora": "^8.0.1",
     "proper-lockfile": "^4.1.2",
     "resolve-package-path": "^4.0.3",
-    "semver": "^7.6.3",
+    "semver": "^7.7.1",
     "shlex": "^2.1.2",
     "source-map-support": "^0.5.21",
     "typanion": "^3.14.0",
