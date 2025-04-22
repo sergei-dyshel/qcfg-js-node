@@ -4,6 +4,7 @@ export { UserConfig } from "./config";
 export * from "./disposable";
 export * from "./error";
 export * from "./misc";
+export * from "./package-json";
 export * from "./process";
 export * from "./random";
 export { shlex } from "./shlex";
