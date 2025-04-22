@@ -43,6 +43,7 @@ const remotesFlag = flagsInput({
     summary: "Remote names to sync. If omited, sync default remote",
     char: "r",
     multiple: true,
+    multipleNonGreedy: true,
   }),
 });
 
@@ -347,11 +348,13 @@ export class RsyncCommand extends RootCommand<typeof RsyncCommand> {
       char: "i",
       summary: "Include files matching pattern",
       multiple: true,
+      multipleNonGreedy: true,
     }),
     exclude: Flags.string({
       char: "e",
       summary: "Exclude files matching pattern",
       multiple: true,
+      multipleNonGreedy: true,
     }),
     src: Flags.string({
       char: "S",
