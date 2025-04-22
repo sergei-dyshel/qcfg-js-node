@@ -1,5 +1,6 @@
 import type { DisposableLike } from "@sergei-dyshel/typescript";
-import type { Awaitable } from "@sergei-dyshel/typescript/types";
+import { normalizeArray } from "@sergei-dyshel/typescript/array";
+import type { Arrayable, Awaitable } from "@sergei-dyshel/typescript/types";
 import { type ChokidarOptions, type FSWatcher, watch } from "chokidar";
 import type { EventName } from "chokidar/handler.js";
 import * as fs from "node:fs";
@@ -93,10 +94,19 @@ export async function isSymbolicLink(path: string) {
 }
 
 export class FileWatcher implements DisposableLike {
-  watcher: FSWatcher;
+  readonly watcher: FSWatcher;
 
-  constructor(paths: string | string[], options?: ChokidarOptions) {
-    this.watcher = watch(paths, options);
+  /**
+   * Initalize watcher.
+   *
+   * @param options See {@link https://github.com/paulmillr/chokidar} for Chokidar options.
+   */
+  constructor(paths?: Arrayable<string>, options?: ChokidarOptions) {
+    this.watcher = watch(normalizeArray(paths), options);
+  }
+
+  add(paths: Arrayable<string>) {
+    this.watcher.add(normalizeArray(paths));
   }
 
   onChange(callback: (path: string) => Awaitable<void>) {
