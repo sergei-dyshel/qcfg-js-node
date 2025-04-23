@@ -64,13 +64,22 @@ export class Output implements AsyncDisposable {
   start() {
     if (this.viewer && this.firstWrite && this.filePath) {
       this.firstWrite = false;
-      void openViewer(this.filePath, this.viewer);
+      this.runViewer();
     }
+  }
+
+  runViewer() {
+    if (this.filePath && this.viewer) void openViewer(this.filePath, this.viewer);
   }
 
   async write(buffer: Uint8Array | string) {
     this.start();
     return writeStream(this.stream, buffer);
+  }
+
+  async truncate() {
+    assertNotNull(this.file);
+    await this.file.truncate(0);
   }
 
   async dispose() {
@@ -131,16 +140,19 @@ export class Output implements AsyncDisposable {
     })();
     const file = await open(path, "w");
     // if output filename may be needed by user, increase level
-    const fileLogLevel =
-      path === options.output || (viewer && viewer !== NO_VIEWER)
-        ? LogLevel.INFO
-        : LogLevel.WARNING;
+    const fileLogLevel = path === options.output ? LogLevel.INFO : LogLevel.WARNING;
     logger.log(fileLogLevel, `Writing to file ${path}`);
     const fileStream = file.createWriteStream();
     if (filterProc) {
       filterProc.stdout!.pipe(fileStream, { end: false });
     }
     return new Output(filterProc ? filterProc.stdin! : fileStream, viewer, filterProc, path, file);
+  }
+
+  static async createFile(path: string) {
+    const file = await open(path, "w");
+    const fileStream = file.createWriteStream();
+    return new Output(fileStream, undefined /* viewer */, undefined /* filterProc */, path, file);
   }
 
   async [Symbol.asyncDispose]() {

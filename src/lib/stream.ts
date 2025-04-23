@@ -15,6 +15,8 @@ export async function concatenateStreams(
   writable: NodeJS.WritableStream,
 ): Promise<void> {
   for (const readable of readables) {
+    // each `pipeline` calls add listeners to writable stream
+    addMaxListeners(writable, 2);
     await pipeline(readable, writable, { signal: AsyncContext.getSignal(), end: false });
   }
 }
