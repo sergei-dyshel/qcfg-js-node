@@ -378,7 +378,7 @@ async function createEsbuildContext(
   const nodeArgs = getRunNodeArgs(options);
   const nodeArgsStr = nodeArgs.join(" ");
   // see https://sambal.org/2014/02/passing-options-node-shebang-line/
-  const nodeShebang = `#!/bin/bash\n":" //# comment; exec /usr/bin/env node ${nodeArgsStr} \${INSPECT:+--inspect} \${INSPECT_BRK:+--inspect-brk} "$0" "$@"`;
+  const nodeShebang = `#!/bin/bash\n":" //# comment; exec /usr/bin/env node ${nodeArgsStr} \${INSPECT:+--inspect} \${INSPECT_BRK:+--inspect-brk} \${TRACE_WARNINGS:+--trace-warnings} "$0" "$@"`;
 
   const external = [
     "esbuild",
