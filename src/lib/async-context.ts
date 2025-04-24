@@ -1,7 +1,7 @@
 import "@sergei-dyshel/typescript/shims";
 
 import { normalizeArray } from "@sergei-dyshel/typescript/array";
-import type { Arrayable, Awaitable } from "@sergei-dyshel/typescript/types";
+import type { Arrayable, Awaitable, Optional } from "@sergei-dyshel/typescript/types";
 import { AsyncLocalStorage } from "async_hooks";
 import { Writable } from "node:stream";
 import type { TimerOptions } from "node:timers";
@@ -9,12 +9,10 @@ import { setTimeout as setTimeoutPromise } from "node:timers/promises";
 import { anyAbortSignal } from "./abort-signal";
 
 export interface AsyncContext {
-  parallel?: boolean;
+  readonly stdout: Writable;
+  readonly stderr: Writable;
 
-  stdout?: Writable;
-  stderr?: Writable;
-
-  signal?: AbortSignal;
+  readonly signal?: AbortSignal;
 }
 
 const asyncContext = new AsyncLocalStorage<AsyncContext>();
@@ -46,15 +44,7 @@ class WritableProxy extends Writable {
 
 export namespace AsyncContext {
   export function get(): AsyncContext {
-    return asyncContext.getStore() ?? {};
-  }
-
-  export function getStdout(): Writable {
-    return get().stdout ?? process.stdout;
-  }
-
-  export function getStderr(): Writable {
-    return get().stderr ?? process.stderr;
+    return { stdout: process.stdout, stderr: process.stderr, ...asyncContext.getStore() };
   }
 
   export function getSignal() {
@@ -64,12 +54,12 @@ export namespace AsyncContext {
   /**
    * Dynamically translates to {@link AsyncContext.stdout} if defined or to `process.stdout`}
    */
-  export const stdout = new WritableProxy(() => get().stdout ?? process.stdout);
+  export const stdout = new WritableProxy(() => get().stdout);
 
   /**
    * Dynamically translates to {@link AsyncContext.stderr} if defined or to `process.stderr`}
    */
-  export const stderr = new WritableProxy(() => get().stderr ?? process.stderr);
+  export const stderr = new WritableProxy(() => get().stderr);
 
   /**
    * Replacement for promisified version of {@link setTimeoutPromise} that respects current context's
@@ -88,7 +78,7 @@ export namespace AsyncContext {
    * Similar to {@link AsyncLocalStorage.run} but instead full context object recives series of
    * modifying functions.
    */
-  export async function run<R>(modifiers: Modifier | Modifier[] | undefined, callback: () => R) {
+  export async function run<R>(modifiers: Arrayable<Modifier>, callback: () => R) {
     let context: AsyncContext = get();
     await using stack = new AsyncDisposableStack();
     for (const modifier of normalizeArray(modifiers)) {
@@ -123,14 +113,14 @@ export namespace AsyncContext {
    */
   export type Modifier = (
     _: AsyncContext,
-  ) => [override: AsyncContext, onDispose?: () => Awaitable<void>];
+  ) => [override: Optional<AsyncContext>, onDispose?: () => Awaitable<void>];
 
   /**
    * {@link AsyncContext} modifying function without dispose callback.
    *
    * For use with {@link AsyncContext.run} or {@link AsyncContext.enterWith}
    */
-  export type SimpleModifier = (_: AsyncContext) => [override: AsyncContext];
+  export type SimpleModifier = (_: AsyncContext) => [override: Optional<AsyncContext>];
 
   /**
    * Identity modifier - passes same context without modifications
@@ -141,6 +131,6 @@ export namespace AsyncContext {
    * Add {@link AbortSignal} to context (merges with existing signals).
    */
   export function addSignal(signal?: AbortSignal): SimpleModifier {
-    return (context) => [{ signal: anyAbortSignal(context.signal, signal) }];
+    return (context) => [{ ...context, signal: anyAbortSignal(context.signal, signal) }];
   }
 }

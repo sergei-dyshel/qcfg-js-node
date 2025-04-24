@@ -133,14 +133,15 @@ export function transformStd(options?: {
 }): AsyncContext.Modifier {
   if (options?.stdout === undefined && options?.stderr === undefined) return AsyncContext.identity;
 
-  return () => {
+  return (context: AsyncContext) => {
     // when runng in multiple workers in parallel, each one adds listeners to stdout/stderr
     // adjust max listeners to avoid the warning
-    addMaxListeners(AsyncContext.getStdout(), 1);
-    addMaxListeners(AsyncContext.getStderr(), 1);
+
+    addMaxListeners(context.stdout, 1);
+    addMaxListeners(context.stderr, 1);
 
     const stdout = new LineBufferedTransform(options.stdout, { forceEndingEOL: true });
-    stdout.pipe(AsyncContext.getStdout(), { end: false });
+    stdout.pipe(context.stdout, { end: false });
 
     const stderr = new LineBufferedTransform(
       options.stderr === null ? options.stdout : options.stderr,
@@ -148,7 +149,7 @@ export function transformStd(options?: {
         forceEndingEOL: true,
       },
     );
-    stderr.pipe(AsyncContext.getStderr(), { end: false });
+    stderr.pipe(context.stderr, { end: false });
     return [
       { stdout, stderr },
       () => {

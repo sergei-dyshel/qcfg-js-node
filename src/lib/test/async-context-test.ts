@@ -24,8 +24,8 @@ async function main() {
         stderr: (line) => `[stderr:${prefix}] ${line}`,
       }),
       async () => {
-        const stdout = AsyncContext.getStdout();
-        const stderr = AsyncContext.getStderr();
+        const stdout = AsyncContext.stdout;
+        const stderr = AsyncContext.stderr;
 
         for (let j = 0; j < 5; j++) {
           for (let i = 0; i < 10; i++) {
