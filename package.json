@@ -29,7 +29,8 @@
     "./axios": "./src/lib/axios.ts",
     "./got": "./src/lib/got.ts",
     "./cli": "./src/lib/cli.ts",
-    "./async": "./src/lib/async.ts"
+    "./async": "./src/lib/async.ts",
+    "./terminal": "./src/lib/terminal.ts"
   },
   "prettier": "@sergei-dyshel/prettier-config",
   "scripts": {
@@ -55,6 +56,7 @@
     "ansicolor": "^2.0.3",
     "axios": "^1.7.8",
     "chokidar": "^4.0.3",
+    "cli-progress": "^3.12.0",
     "clipanion": "^4.0.0-rc.3",
     "cmd-ts": "^0.13.0",
     "commander": "^12.1.0",
@@ -77,6 +79,7 @@
   "devDependencies": {
     "@sergei-dyshel/eslint-config": "*",
     "@sergei-dyshel/prettier-config": "*",
+    "@types/cli-progress": "^3.11.6",
     "@types/fs-extra": "^11.0.1",
     "@types/git-url-parse": "^9.0.3",
     "@types/global-prefix": "^3.0.2",
