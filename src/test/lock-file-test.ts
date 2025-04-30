@@ -93,10 +93,7 @@ async function main() {
       await runSingle(args);
     }
   } catch (err) {
-    const signal = OnTerminate.causedBySignal(err);
-    if (signal) {
-      process.kill(process.pid, signal);
-    }
+    if (!OnTerminate.killIfCausedBy(err)) throw err;
   }
 }
 

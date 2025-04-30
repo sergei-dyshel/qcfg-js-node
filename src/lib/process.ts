@@ -16,6 +16,9 @@ export namespace OnTerminate {
   }
 
   function handler(signal: string) {
+    process.stderr.write(`Caught ${signal}\n`);
+    // remove handlers so that second press of Ctrl-C will cancellation flow (which may be stuck/long too)
+    for (const signal of SIGNALS) process.removeAllListeners(signal);
     controller.abort(signal);
   }
 
@@ -40,6 +43,21 @@ export namespace OnTerminate {
         ? (err.cause as SignalsType)
         : undefined,
     );
+  }
+
+  /**
+   * Terminate process if error was caused by observed signals
+   */
+  export function killIfCausedBy(err: unknown) {
+    const signal = causedBySignal(err);
+    // Should work because we remove listeners upon receiving signal
+    if (signal) {
+      process.stderr.write(`Exiting on ${signal}\n`);
+      process.kill(process.pid, signal);
+      return true;
+    }
+    // XXX: not sure return value is needed
+    return false;
   }
 }
 

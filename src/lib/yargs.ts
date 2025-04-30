@@ -3,6 +3,7 @@ import { extendsType } from "@sergei-dyshel/typescript/types";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { configureLogging, LogLevel, LogLevels } from "./logging";
+import { OnTerminate } from "./process";
 
 export type { Argv, InferredOptionTypes } from "yargs";
 
@@ -78,6 +79,7 @@ export function create(options?: {
 export function defaultFail(msg: string, err: Error, options?: { showCause?: boolean }) {
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   if (err) {
+    if (OnTerminate.killIfCausedBy(err)) return;
     process.stderr.write(formatError(err, options) + "\n");
     // some errors may set exit code, we do not want to override it
     if (process.exitCode === undefined) process.exitCode = 1;
