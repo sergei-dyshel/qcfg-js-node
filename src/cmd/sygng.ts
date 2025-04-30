@@ -115,7 +115,7 @@ export class RemoteAddCommand extends RootCommand {
   }
 }
 
-@command(["remote", "remove"])
+@command(["remote", "delete"])
 export class RemoteDeleteCommand extends RootCommand {
   protected declare flags: CommandFlags<typeof RemoteDeleteCommand>;
   protected declare args: CommandArgs<typeof RemoteDeleteCommand>;
@@ -123,6 +123,7 @@ export class RemoteDeleteCommand extends RootCommand {
   static override summary = "Delete remote";
 
   static override strict = false;
+  static override aliases = ["remote:remove"];
 
   static override args = argsInput({
     remotes: Args.string({
@@ -165,15 +166,13 @@ export class RemoteSetupCommand extends RootCommand {
   static override summary = "Setup remote";
 
   static override args = argsInput({
-    name: Args.string({
-      description: "Remote name",
+    remote: Args.string({
+      description: "Remote name. When omitted, setup default remote.",
     }),
   });
 
   override async run() {
-    await this.syg.setupRemote(
-      this.args.name ?? (await this.syg.getDefaultRemote({ check: true })),
-    );
+    await this.syg.setupRemote(this.args.remote);
   }
 }
 

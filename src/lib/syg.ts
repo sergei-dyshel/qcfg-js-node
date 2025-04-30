@@ -246,7 +246,11 @@ export class Syg {
     await ssh.writeFile(".git/hooks/push-to-checkout", pushToCheckoutHook, { mode: 0o755 });
   }
 
-  async getDefaultRemote(options: { check: true; allowOnly?: boolean }): Promise<string>;
+  async getDefaultRemote(options: {
+    check: true;
+    /** If there is only one defined remote, consider it default */
+    allowOnly?: boolean;
+  }): Promise<string>;
   async getDefaultRemote(options?: {
     /** Throw if can't determine default remote */
     // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
@@ -650,5 +654,5 @@ const pushToCheckoutHook = dedent`
   #!/bin/bash
 
   git reset --hard --quiet
-  git read-tree -u -m HEAD "$1"
+  git read-tree -u --reset HEAD "$1"
 `;
