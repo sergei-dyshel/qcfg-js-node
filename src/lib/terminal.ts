@@ -12,16 +12,35 @@ export { Presets as BarPresets };
 /**
  * See {@link https://www.npmjs.com/package/cli-progress}.
  */
-export class MultiBar<T extends object> extends CliMultiBar {
-  declare create: (
+export class MultiBar<T extends object> extends CliMultiBar implements Disposable {
+  override create<P extends object>(
+    total: number,
+    startValue: number,
+    payload?: P,
+    barOptions?: Options,
+  ): SingleBar<P>;
+  override create(
     total: number,
     startValue: number,
     payload?: T,
     barOptions?: Options,
-  ) => SingleBar<T>;
+  ): SingleBar<T>;
+  override create(
+    total: number,
+    startValue: number,
+    payload?: object,
+    barOptions?: Options,
+  ): SingleBar {
+    const singleBar = super.create(total, startValue, payload, barOptions) as SingleBar;
+    return singleBar;
+  }
+
+  [Symbol.dispose]() {
+    this.stop();
+  }
 }
 
-export interface SingleBar<T extends object> extends CliSingleBar {
+export interface SingleBar<T extends object = object> extends CliSingleBar {
   update(current: number, payload?: T): void;
   update(payload: T): void;
   start(total: number, startValue: number, payload?: T): void;
