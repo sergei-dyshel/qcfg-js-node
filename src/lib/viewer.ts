@@ -117,6 +117,8 @@ export class Output implements AsyncDisposable {
       filterProc = run(shlex.split(filter), {
         stdin: "pipe",
         stdout: toStdout ? undefined : "pipe",
+        // otherwise uncaught abort signal will crash entire process
+        signal: null,
       }).child;
     }
 

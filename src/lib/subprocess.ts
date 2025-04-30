@@ -14,7 +14,7 @@
 
 import { deepMerge } from "@sergei-dyshel/typescript/deep-merge";
 import { assert } from "@sergei-dyshel/typescript/error";
-import type { WithRequired } from "@sergei-dyshel/typescript/types";
+import type { Replace, WithRequired } from "@sergei-dyshel/typescript/types";
 import type {
   ChildProcess,
   IOType,
@@ -75,7 +75,8 @@ export interface SubprocessRunOptions {
   throwIfAborted?: boolean;
 }
 
-export type RunOptions = SpawnOptionsWithoutStdio & SubprocessRunOptions & { log?: RunLogOptions };
+export type RunOptions = Replace<SpawnOptionsWithoutStdio, { signal?: AbortSignal | null }> &
+  SubprocessRunOptions & { log?: RunLogOptions };
 
 /**
  * Error when spawning process.
@@ -197,7 +198,7 @@ function buildStdio({ input, stdin, stdout, stderr }: RunOptions) {
   stderr = stderr ?? asyncCtx.stderr;
 
   const spawnOut: IOType | StdioStream =
-    stdout === undefined
+    stdout === process.stdout
       ? "inherit"
       : stdout === "pipe" || stdout === "ignore"
         ? stdout
@@ -206,7 +207,7 @@ function buildStdio({ input, stdin, stdout, stderr }: RunOptions) {
           : "pipe";
 
   const spawnErr: IOType | StdioStream =
-    stderr === undefined
+    stderr === process.stderr
       ? "inherit"
       : stderr === "pipe" || stderr === "ignore"
         ? stderr
@@ -221,8 +222,10 @@ function buildStdio({ input, stdin, stdout, stderr }: RunOptions) {
 
 /** Similar to {@link child_process.spawn} */
 export function spawn(command: Command, options?: RunOptions) {
-  const signal = anyAbortSignal(AsyncContext.get().signal, options?.signal);
-  signal?.throwIfAborted();
+  const signal =
+    options?.signal === null
+      ? undefined
+      : anyAbortSignal(AsyncContext.get().signal, options?.signal);
 
   const cmd = typeof command === "string" ? command : command[0];
   const args = typeof command === "string" ? [] : command.slice(1);
