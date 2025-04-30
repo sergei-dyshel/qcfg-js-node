@@ -46,15 +46,6 @@ abstract class RootCommand extends BaseCommandWithVerbosity {
   }
 }
 
-const remotesFlag = flagsInput({
-  remotes: Flags.string({
-    summary: "Remote names to sync. If omited, sync default remote",
-    char: "r",
-    multiple: true,
-    multipleNonGreedy: true,
-  }),
-});
-
 @command("init")
 export class InitCommand extends BaseCommandWithVerbosity {
   protected declare flags: CommandFlags<typeof InitCommand>;
@@ -121,6 +112,29 @@ export class RemoteAddCommand extends RootCommand {
         force: this.flags.force,
       },
     );
+  }
+}
+
+@command(["remote", "remove"])
+export class RemoteDeleteCommand extends RootCommand {
+  protected declare flags: CommandFlags<typeof RemoteDeleteCommand>;
+  protected declare args: CommandArgs<typeof RemoteDeleteCommand>;
+
+  static override summary = "Delete remote";
+
+  static override strict = false;
+
+  static override args = argsInput({
+    remotes: Args.string({
+      summary: "Remotes to remove",
+      required: true,
+    }),
+  });
+
+  override async run() {
+    for (const remote of this.argv) {
+      await this.syg.removeRemote(remote);
+    }
   }
 }
 
@@ -268,18 +282,25 @@ export class SyncCommand extends RootCommand {
 
   static override summary = "Sync remote(s)";
 
+  static override strict = false;
+
   static override flags = flagsInput({
-    ...remotesFlag,
+    path: Flags.string({
+      char: "p",
+      description: "Paths to sync",
+      multiple: true,
+      multipleNonGreedy: true,
+    }),
   });
 
   static override args = argsInput({
-    path: Args.string({
-      description: "Paths to sync",
+    remotes: Args.string({
+      summary: "Remote names to sync. If omited, sync default remote",
     }),
   });
 
   override async run() {
-    const updated = await this.syg.sync({ remotes: this.flags.remotes, pathspecs: this.argv });
+    const updated = await this.syg.sync({ remotes: this.argv, pathspecs: this.flags.path });
     if (!updated) logger.warn("No remotes were updated");
   }
 }
@@ -378,7 +399,12 @@ export class RsyncCommand extends RootCommand {
   });
 
   static override flags = flagsInput({
-    ...remotesFlag,
+    remotes: Flags.string({
+      summary: "Remotes to sync. If omited, sync default remote",
+      char: "r",
+      multiple: true,
+      multipleNonGreedy: true,
+    }),
     update: Flags.boolean({
       char: "u",
       summary: "Only update old files",
