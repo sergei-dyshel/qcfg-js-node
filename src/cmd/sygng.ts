@@ -87,6 +87,8 @@ export class RemoteAddCommand extends RootCommand {
     setup: Flags.boolean({
       char: "s",
       summary: "Setup remote",
+      default: true,
+      allowNo: true,
     }),
     force: Flags.boolean({
       char: "f",
