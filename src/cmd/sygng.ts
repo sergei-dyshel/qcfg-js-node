@@ -367,12 +367,14 @@ export class RsyncCommand extends RootCommand {
   protected declare flags: CommandFlags<typeof RsyncCommand>;
   protected declare args: CommandArgs<typeof RsyncCommand>;
 
+  static override strict = false;
   static override summary = "Upload/download files to remote using rsync";
   static override args = argsInput({
     files: Args.string({
       summary: "File names to upload/download",
     }),
   });
+
   static override flags = flagsInput({
     ...remotesFlag,
     update: Flags.boolean({
