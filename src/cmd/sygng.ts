@@ -371,7 +371,7 @@ export class ExecCommand extends RootCommand {
 
   static override summary = "Execute shell command on remote";
 
-  static override args = restArgs();
+  static override args = restArgs({ name: "CMD", required: true });
   static override flags = flagsInput({
     remote: Flags.string({
       summary: "Remote name",
