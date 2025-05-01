@@ -1,4 +1,5 @@
 import { dedent } from "@sergei-dyshel/typescript/string";
+import { Ssh } from "../lib";
 import { userConfig } from "../lib/config";
 import { RootLogger } from "../lib/logging";
 import { nativeExecRunner } from "../lib/native-exec";
@@ -18,6 +19,7 @@ import {
   restArgs,
   runCli,
 } from "../lib/oclif";
+import { retry } from "../lib/retry";
 import { Syg } from "../lib/syg";
 export { allOclifCommands, OclifHelp };
 
@@ -375,11 +377,21 @@ export class ExecCommand extends RootCommand {
       summary: "Remote name",
       char: "r",
     }),
+    wait: Flags.boolean({
+      summary: "Wait for remote to be SSH-able",
+      char: "w",
+    }),
   });
 
   override async run() {
     const config = await userConfig.get();
     const ssh = await this.syg.remoteSsh(this.flags.remote);
+    if (this.flags.wait) {
+      await retry(() => Ssh.ping(ssh.host, { check: true }), {
+        backoffFactor: 2,
+        maxDelayMs: 15000,
+      });
+    }
     const result = await ssh.run(this.argv, {
       source: config.syg?.execSource,
       // execute commands with exec syscall
