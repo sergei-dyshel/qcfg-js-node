@@ -227,7 +227,7 @@ export class RemoteDumpCommand extends RootCommand {
   protected declare flags: CommandFlags<typeof RemoteDumpCommand>;
   protected declare args: CommandArgs<typeof RemoteDumpCommand>;
 
-  static override aliases = ["remote"];
+  static override aliases = ["remote", "dump"];
   static override summary = "Dump information about remote";
 
   static override flags = flagsInput({
