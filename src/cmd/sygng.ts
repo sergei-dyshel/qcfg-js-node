@@ -1,6 +1,7 @@
 import { dedent } from "@sergei-dyshel/typescript/string";
 import { userConfig } from "../lib/config";
 import { RootLogger } from "../lib/logging";
+import { nativeExecRunner } from "../lib/native-exec";
 import {
   allOclifCommands,
   Args,
@@ -379,7 +380,11 @@ export class ExecCommand extends RootCommand {
   override async run() {
     const config = await userConfig.get();
     const ssh = await this.syg.remoteSsh(this.flags.remote);
-    const result = await ssh.run(this.argv, { source: config.syg?.execSource });
+    const result = await ssh.run(this.argv, {
+      source: config.syg?.execSource,
+      // execute commands with exec syscall
+      runner: nativeExecRunner,
+    });
     process.exit(result.exitCode ?? 0);
   }
 }
