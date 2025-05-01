@@ -8,6 +8,8 @@
  *   - Automatic case conversion, e.g. `myFlag` <=> `--my-flag`
  *   - Support bundling into single executable file.
  *   - "Rest" arg for writing wrapper command.
+ *   - Make some flag/arg properties on by default: {@link Arg.ignoreStdin} and
+ *       {@link OptionFlag.multipleNonGreedy}
  *
  *   To work properly, you ust export {@link allOclifCommands} and {@link OclifHelp } in main file,
  *   e.g.:
@@ -38,17 +40,20 @@ import {
 import { CLIError } from "@oclif/core/errors";
 import { Hook, type Hooks } from "@oclif/core/hooks";
 import type {
+  Arg,
   BooleanFlag,
   CommandError,
+  Flag,
   FlagInput,
   InferredArgs,
   OclifConfiguration,
+  OptionFlag,
   PJSON,
 } from "@oclif/core/interfaces";
 import * as PluginAutoComplete from "@sergei-dyshel/oclif-plugin-autocomplete-cjs";
 import { assert, assertNotNull } from "@sergei-dyshel/typescript/error";
 import { DefaultMap } from "@sergei-dyshel/typescript/map";
-import { mapKeys, objectEntries } from "@sergei-dyshel/typescript/object";
+import { mapEntries, mapKeys, objectEntries } from "@sergei-dyshel/typescript/object";
 import { camelCase, kebabCase } from "@sergei-dyshel/typescript/string";
 import { canBeUndefined, extendsType } from "@sergei-dyshel/typescript/types";
 import "reflect-metadata";
@@ -250,17 +255,35 @@ export abstract class BaseCommand extends Command {
     const toKebabCase = (key: string) => kebabCase(key);
     const toCamelCase = (key: string) => camelCase(key);
 
+    const convertFlagEntry = (name: string, flag: Flag<any>) => {
+      const optFlag = flag as OptionFlag<any>;
+      return [
+        toKebabCase(name),
+        // if `multiple` is defined, we have OptionFlag so we turn on
+        // multipleNonGreedy automatically
+        { ...flag, multipleNonGreedy: optFlag.multipleNonGreedy ?? optFlag.multiple },
+      ] as const;
+    };
+
+    const kebabFlags = mapEntries(canBeUndefined(this.ctor.flags) ?? {}, convertFlagEntry);
+    const kebabBaseFlags = mapEntries(
+      canBeUndefined((super.ctor as typeof BaseCommand).baseFlags as FlagsInput) ?? {},
+      convertFlagEntry,
+    );
+    const kebabArgs = mapEntries(
+      canBeUndefined(this.ctor.args) ?? {},
+      (name, arg: Arg<any>) =>
+        [
+          name === REST_ARG_NAME ? name : toKebabCase(name),
+          { ...arg, ignoreStdin: arg.ignoreStdin ?? true },
+        ] as const,
+    );
     const { args, flags, argv } = await this.parse(
       {
-        flags: mapKeys(canBeUndefined(this.ctor.flags) ?? {}, toKebabCase),
-        baseFlags: mapKeys(
-          canBeUndefined((super.ctor as typeof BaseCommand).baseFlags) ?? {},
-          toKebabCase,
-        ),
+        flags: kebabFlags,
+        baseFlags: kebabBaseFlags,
         enableJsonFlag: this.ctor.enableJsonFlag,
-        args: mapKeys(canBeUndefined(this.ctor.args) ?? {}, (arg) =>
-          arg === REST_ARG_NAME ? arg : toKebabCase(arg),
-        ),
+        args: kebabArgs,
         strict,
       },
       fullArgv,
