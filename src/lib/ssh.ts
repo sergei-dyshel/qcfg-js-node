@@ -60,6 +60,16 @@ export interface Config {
 
   /** https://www.mankier.com/5/ssh_config#ServerAliveCountMax */
   ServerAliveCountMax?: number;
+
+  /** https://www.mankier.com/5/ssh_config#BatchMode */
+  BatchMode?: boolean;
+
+  /**
+   * Same as `-f` flag.
+   *
+   * https://www.mankier.com/5/ssh_config#ForkAfterAuthentication
+   */
+  ForkAfterAuthentication?: boolean;
 }
 
 export const WEAK_AUTH_SSH_CONFIG: Config = {
@@ -179,6 +189,25 @@ export function normalizePath(sshPath: string) {
   return normalize(sshPath);
 }
 
+/**
+ * @returns Whether host is reachable over SSH
+ */
+export async function ping(
+  host: string,
+  options?: {
+    /** Throw exception if SSH fails */
+    check?: boolean;
+  },
+): Promise<boolean> {
+  const result = await run(host, "echo", {
+    forkAfterAuth: true,
+    quiet: true,
+    config: { BatchMode: true },
+    run: { stdin: "ignore", stdout: "ignore", stderr: "ignore", check: options?.check },
+  });
+  return result.exitCode != 0;
+}
+
 const sshSchema = Cmd.schema({
   quiet: Cmd.boolean({ custom: "-q" }),
   key: Cmd.string({ custom: "-i" }),
@@ -187,6 +216,7 @@ const sshSchema = Cmd.schema({
   jumpHost: Cmd.string({ custom: "-J" }),
   logFile: Cmd.string({ custom: "-E" }),
   configFile: Cmd.string({ custom: "-F" }),
+  forkAfterAuth: Cmd.boolean({ custom: "-f" }),
 });
 
 function configValueToString(val: unknown) {
