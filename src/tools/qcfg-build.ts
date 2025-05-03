@@ -3,7 +3,7 @@ import { filterAsync, mapAsync } from "@sergei-dyshel/typescript/array";
 import { assert, assertNotNull } from "@sergei-dyshel/typescript/error";
 import * as esbuild from "esbuild";
 import { writeFileSync } from "node:fs";
-import { chmod, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative } from "node:path";
 import { waitForever } from "../lib/async";
 import { exists, isDirectorySync, isFileSync } from "../lib/filesystem";
@@ -178,6 +178,9 @@ export class RunCommand extends RootCommand {
     ifBuilt: Flags.boolean({
       description: "Only run if target was rebuilt",
     }),
+    deleteIfFails: Flags.boolean({
+      description: "Delete target if run fails",
+    }),
     debug: Flags.boolean({
       description: "Run in debug mode (--inspect-brk)",
       char: "d",
@@ -223,6 +226,12 @@ export class RunCommand extends RootCommand {
     const fullCmd = [...cmd, target.out, ...this.argv];
     logger.info("Running: ", shlex.join(fullCmd));
     const result = await run(fullCmd);
+    if (result.exitCode !== 0) {
+      if (this.flags.deleteIfFails) {
+        logger.info(`Deleting ${target.out} because command failed`);
+        await unlink(target.out);
+      }
+    }
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
     process.exit(result.exitCode!);
   }
