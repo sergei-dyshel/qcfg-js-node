@@ -439,12 +439,23 @@ export async function reset(
   args: string | string[],
   options?: {
     quiet?: boolean;
+    soft?: boolean;
+    mixed?: boolean;
+    hard?: boolean;
+    merge?: boolean;
+    keep?: boolean;
   } & RunOptions,
 ) {
   return runCommand(
     "reset",
     typeof args === "string" ? [args] : args,
-    {},
+    {
+      soft: Cmd.boolean(),
+      mixed: Cmd.boolean(),
+      hard: Cmd.boolean(),
+      merge: Cmd.boolean(),
+      keep: Cmd.boolean(),
+    },
     deepMerge(logByDefault, options),
   );
 }

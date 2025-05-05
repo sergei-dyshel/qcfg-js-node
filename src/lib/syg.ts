@@ -365,8 +365,21 @@ export class Syg {
         quiet: !this.gitVerbose,
         // ammend to "add commit"
         amend: !!addCommit,
+        // if changes from "add commit" are being removed, ammending them would make
+        // "add commit" empty
+        allowEmpty: !!addCommit,
       });
       addCommit = await this.sygGit.revParseHead();
+    }
+    if (addCommit) {
+      if (
+        (await this.sygGit.revParse("HEAD^{tree}", { check: true })) ===
+        (await this.sygGit.revParse("HEAD~1^{tree}", { check: true }))
+      ) {
+        logger.debug("Removing empty add commit");
+        await this.sygGit.reset("HEAD^", { hard: true, quiet: !this.gitVerbose });
+        addCommit = undefined;
+      }
     }
 
     const expectedRemoteHead = addCommit ?? head;
