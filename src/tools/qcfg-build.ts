@@ -418,7 +418,7 @@ async function createEsbuildContext(
     bundle: true,
     format: "cjs",
     platform: "node",
-    target: "es2023",
+    target: "node20",
     // inline sourcemaps do not work well with remote debugging
     sourcemap: "linked",
     external,
