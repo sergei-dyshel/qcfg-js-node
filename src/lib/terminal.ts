@@ -4,6 +4,7 @@ import {
   type Options,
   Presets,
 } from "cli-progress";
+import type { WriteStream } from "tty";
 import { AsyncContext } from "./async-context";
 import { LineBufferedTransform } from "./stream";
 
@@ -12,7 +13,7 @@ export { Presets as BarPresets };
 /**
  * See {@link https://www.npmjs.com/package/cli-progress}.
  */
-export class MultiBar<T extends object> extends CliMultiBar implements Disposable {
+export class MultiBar<T extends object = object> extends CliMultiBar implements Disposable {
   override create<P extends object>(
     total: number,
     startValue: number,
@@ -51,7 +52,7 @@ export async function withProgressBar<M extends object, T>(
   callback: () => Promise<T>,
 ) {
   return bar
-    ? AsyncContext.run(progressBarLog(bar), async () => {
+    ? AsyncContext.run(await progressBarLog(bar), async () => {
         try {
           return await callback();
         } finally {
@@ -61,22 +62,34 @@ export async function withProgressBar<M extends object, T>(
     : await callback();
 }
 
-function progressBarLog<M extends object>(bar: MultiBar<M>): AsyncContext.SimpleModifier {
-  const logTransform = new LineBufferedTransform(
-    (line) => {
-      bar.log(line + "\n");
-      return line;
-    },
-    {
-      forceEndingEOL: true,
-    },
-  );
+async function progressBarLog<M extends object>(
+  bar: MultiBar<M>,
+): Promise<AsyncContext.SimpleModifier> {
+  const wrapAnsi = await import("wrap-ansi");
+  const logTransform = (stream: WriteStream) => {
+    const [numColumns, _] = stream.getWindowSize();
+    return new LineBufferedTransform(
+      (line) => {
+        // see https://github.com/npkgz/cli-progress/issues/142
+        const wrappedLine = wrapAnsi.default(line, numColumns, { hard: true, trim: false }) + "\n";
+        bar.log(wrappedLine);
+        return line;
+      },
+      {
+        forceEndingEOL: true,
+      },
+    );
+  };
   return (context) => [
     {
       stdout:
-        context.stdout === process.stdout && process.stdout.isTTY ? logTransform : context.stdout,
+        context.stdout === process.stdout && process.stdout.isTTY
+          ? logTransform(process.stdout)
+          : context.stdout,
       stderr:
-        context.stderr === process.stderr && process.stderr.isTTY ? logTransform : context.stderr,
+        context.stderr === process.stderr && process.stderr.isTTY
+          ? logTransform(process.stderr)
+          : context.stderr,
     },
   ];
 }
