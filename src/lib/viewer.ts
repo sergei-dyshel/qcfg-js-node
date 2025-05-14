@@ -85,13 +85,20 @@ export class Output implements AsyncDisposable {
   async dispose() {
     if (this.filter) {
       this.filter.stdin!.end();
-      await new Promise((resolve) => {
-        this.filter?.on("close", resolve);
-      });
+      if (this.filter.exitCode === null) {
+        // if process already finished, the event will never happen and node process just exit
+        await new Promise<void>((resolve) => {
+          this.filter?.on("close", () => resolve());
+        });
+      }
     }
     if (this.file) {
-      await this.file.sync();
-      await this.file.close();
+      try {
+        await this.file.sync();
+        await this.file.close();
+      } catch (err) {
+        // swallow file errors (if it's closed already)
+      }
     }
   }
 
