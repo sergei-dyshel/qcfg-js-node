@@ -1,6 +1,6 @@
 import { errorCausedBy } from "@sergei-dyshel/typescript/error";
 import { type Awaitable, type ElementType, extendsType } from "@sergei-dyshel/typescript/types";
-import { isAbortError } from "./abort-signal";
+import { isAbortError, removeAbortSignalListenersLimit } from "./abort-signal";
 import { AsyncContext } from "./async-context";
 
 const SIGNALS = extendsType<NodeJS.Signals[]>()(["SIGTERM", "SIGINT"]);
@@ -29,6 +29,7 @@ export namespace OnTerminate {
     if (installed) return;
     for (const signal of SIGNALS) process.on(signal, handler);
     AsyncContext.enterWith(AsyncContext.addSignal(signal()));
+    removeAbortSignalListenersLimit(signal());
     installed = true;
   }
 
