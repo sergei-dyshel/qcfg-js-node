@@ -11,25 +11,31 @@ const DURATION_REGEX = new RegExpWithNamedGroups(
   "((?<weeks>\\d+)w)?((?<days>\\d+)d)?((?<hours>\\d+)h)?((?<minutes>\\d+)m)?",
 );
 
+interface ParseDateOptions {
+  now?: Date;
+  /** Round to end of hour (e.g. 23:00 => 23:59:59) */
+  roundEnd?: boolean;
+}
+
 /**
  * Parse date/time range.
  *
  * If start/end timestamp is not provided, assume "now".
  */
-export function parseDateRange(start?: string, end?: string, now?: Date) {
-  if (!now) now = new Date();
-  const startDate = parseTimestamp(start, now);
-  const endDate = end ? parseTimestamp(end, now, startDate) : now;
+export function parseDateRange(start?: string, end?: string, options?: ParseDateOptions) {
+  const now = options?.now ?? new Date();
+  const startDate = parseTimestamp(start, { ...options, now });
+  const endDate = end ? parseTimestamp(end, { ...options, now, start: startDate }) : now;
   return { start: startDate, end: endDate };
 }
 
 /**
  * Like {@link parseDateRange} but do not assume "now" for missing start/end.
  */
-export function parseOptionalDateRange(start?: string, end?: string, now?: Date) {
-  if (!now) now = new Date();
-  const startDate = start ? parseTimestamp(start, now) : null;
-  const endDate = end ? parseTimestamp(end, now, startDate) : undefined;
+export function parseOptionalDateRange(start?: string, end?: string, options?: ParseDateOptions) {
+  const now = options?.now ?? new Date();
+  const startDate = start ? parseTimestamp(start, { ...options, now }) : null;
+  const endDate = end ? parseTimestamp(end, { ...options, now, start: startDate }) : undefined;
   return { start: startDate, end: endDate };
 }
 
@@ -41,10 +47,18 @@ function myParseInt<D>(s: string | undefined, defaultValue: D): D | number {
  * Parse start or end timestamp of time range.
  *
  * @param ts If undefined, assume "now".
- * @param start When not undefined, we are parsing end timestamp (use `null` when start timestamp is
- *   missing).
  */
-export function parseTimestamp(ts: string | undefined, now: Date, start?: Date | null) {
+export function parseTimestamp(
+  ts: string | undefined,
+  options?: ParseDateOptions & {
+    /**
+     * When not undefined, we are parsing end timestamp (use `null` when start timestamp is missing)
+     */
+    start?: Date | null;
+  },
+) {
+  const start = options?.start;
+  const now = options?.now ?? new Date();
   // by default return inverval from one hour ago until now
   if (ts === undefined) return start ? now : new Date(now.getTime() - 60 * 60 * 1000);
 
@@ -70,9 +84,10 @@ export function parseTimestamp(ts: string | undefined, now: Date, start?: Date |
   assertNotNull(match, `Invalid timestamp format: ${ts}`);
 
   const groups = match.groups!;
-  const second = groups.second ? parseInt(groups.second) : start !== undefined ? 59 : 0;
-  const minute = groups.minute ? parseInt(groups.minute) : start !== undefined ? 59 : 0;
-  const hour = groups.hour ? parseInt(groups.hour) : start !== undefined ? 23 : 0;
+  const roundEnd = start !== undefined && options?.roundEnd;
+  const second = groups.second ? parseInt(groups.second) : roundEnd ? 59 : 0;
+  const minute = groups.minute ? parseInt(groups.minute) : roundEnd ? 59 : 0;
+  const hour = groups.hour ? parseInt(groups.hour) : roundEnd ? 23 : 0;
 
   const base = start ?? now;
 
