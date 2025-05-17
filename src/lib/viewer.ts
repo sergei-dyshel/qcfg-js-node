@@ -1,4 +1,5 @@
-import { assertNotNull } from "@sergei-dyshel/typescript/error";
+import { assert, assertNotNull } from "@sergei-dyshel/typescript/error";
+import { canBeUndefined } from "@sergei-dyshel/typescript/types";
 import type { ChildProcess } from "node:child_process";
 import { type FileHandle, open } from "node:fs/promises";
 import { userConfig } from "./config";
@@ -38,48 +39,80 @@ export function openViewer(path: string, viewer: string) {
 export class Output implements AsyncDisposable {
   static readonly NO_OUTPUT = "-";
 
-  readonly stream: NodeJS.WritableStream;
-  private readonly viewer?: string;
-  private readonly filter?: ChildProcess;
-  readonly filePath?: string;
-  readonly file?: FileHandle;
-
   private firstWrite = true;
 
+  /**
+   * Final destination output stream, either passed from outside or created from file
+   */
+  private dstStream!: NodeJS.WritableStream;
+
   private constructor(
-    stream: NodeJS.WritableStream,
-    viewer?: string,
-    filter?: ChildProcess,
-    filePath?: string,
-    file?: FileHandle,
+    stream?: NodeJS.WritableStream,
+    private readonly viewer?: string,
+    private readonly filter?: ChildProcess,
+    readonly filePath?: string,
+    public file?: FileHandle,
   ) {
-    this.stream = stream;
-    this.viewer = viewer;
-    this.filter = filter;
-    this.filePath = filePath;
-    this.file = file;
+    if (stream) {
+      assert(file === undefined);
+      this.dstStream = stream;
+    } else {
+      assertNotNull(file);
+      this.recreateFileStream();
+    }
+  }
+
+  private recreateFileStream() {
+    assertNotNull(this.file);
+    if (this.filter) {
+      // will be undefined when called in constructor
+      if (canBeUndefined(this.dstStream)) {
+        this.filter.stdout!.unpipe(this.dstStream);
+        this.dstStream.end();
+      }
+    }
+    this.dstStream = this.file.createWriteStream({
+      // does seek(0) on fd
+      start: 0,
+      autoClose: false,
+      // buffer size
+      highWaterMark: 4096,
+    });
+    if (this.filter) {
+      this.filter.stdout!.pipe(this.dstStream, { end: false });
+    }
   }
 
   /** Should be called on first output to stream */
-  start() {
-    if (this.viewer && this.firstWrite && this.filePath) {
+  private start() {
+    if (this.firstWrite) {
       this.firstWrite = false;
-      this.runViewer();
+      if (this.viewer && this.filePath) {
+        this.runViewer();
+      }
     }
+  }
+
+  get stream() {
+    return this.filter ? this.filter.stdin! : this.dstStream;
   }
 
   runViewer() {
     if (this.filePath && this.viewer) void openViewer(this.filePath, this.viewer);
   }
 
-  async write(buffer: Uint8Array | string) {
+  async write(buffer: Uint8Array | string, unfiltered?: boolean) {
+    await writeStream(unfiltered ? this.dstStream : this.stream, buffer);
     this.start();
-    return writeStream(this.stream, buffer);
   }
 
   async truncate() {
     assertNotNull(this.file);
+    await this.file.sync();
     await this.file.truncate(0);
+    this.recreateFileStream();
+    // this approach doesn't properly work with filter process, probably because
+    // of the buffering along the output pipeline
   }
 
   async dispose() {
@@ -129,8 +162,11 @@ export class Output implements AsyncDisposable {
       }).child;
     }
 
-    if (toStdout)
-      return new Output(filterProc ? filterProc.stdin! : process.stdout, viewer, filterProc);
+    if (toStdout) {
+      const logLevel = options.output === this.NO_OUTPUT ? LogLevel.DEBUG : LogLevel.INFO;
+      logger.log(logLevel, "Writing to stdout");
+      return new Output(process.stdout, viewer, filterProc);
+    }
 
     const path = await (async () => {
       let filename: string;
@@ -151,17 +187,18 @@ export class Output implements AsyncDisposable {
     // if output filename may be needed by user, increase level
     const fileLogLevel = path === options.output ? LogLevel.INFO : LogLevel.WARNING;
     logger.log(fileLogLevel, `Writing to file ${path}`);
-    const fileStream = file.createWriteStream();
-    if (filterProc) {
-      filterProc.stdout!.pipe(fileStream, { end: false });
-    }
-    return new Output(filterProc ? filterProc.stdin! : fileStream, viewer, filterProc, path, file);
+    return new Output(undefined /* stream */, viewer, filterProc, path, file);
   }
 
   static async createFile(path: string) {
     const file = await open(path, "w");
-    const fileStream = file.createWriteStream();
-    return new Output(fileStream, undefined /* viewer */, undefined /* filterProc */, path, file);
+    return new Output(
+      undefined /* file */,
+      undefined /* viewer */,
+      undefined /* filterProc */,
+      path,
+      file,
+    );
   }
 
   async [Symbol.asyncDispose]() {
