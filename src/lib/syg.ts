@@ -347,7 +347,9 @@ export class Syg {
     const log = await this.sygGit.logParse(undefined, { maxCount: 2 });
     // syg head is "add commit" on top repo head, so we can just amend all changed files to it
     let addCommit =
-      log[0].subject === ADD_COMMIT_MSG && log[1].hash === head ? log[0].hash : undefined;
+      log.length > 0 && log[0].subject === ADD_COMMIT_MSG && log[1].hash === head
+        ? log[0].hash
+        : undefined;
     if (addCommit) logger.debug(`"add commit" present`);
 
     if (!addCommit) await this.sygGit.reset(head, { quiet: !this.gitVerbose });

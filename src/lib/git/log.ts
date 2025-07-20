@@ -1,7 +1,7 @@
 import { deepMerge } from "@sergei-dyshel/typescript/deep-merge";
 import { assert } from "@sergei-dyshel/typescript/error";
 import * as Cmd from "../cmdline-builder";
-import { type RunOptions, runCommand, withOutErr } from "./common";
+import { type RunOptions, noCheck, runCommand, withOutErr } from "./common";
 
 type FieldType<T extends string> = T extends `${string}Date` ? Date : string;
 
@@ -66,13 +66,13 @@ export async function parse(
 ): Promise<Entry[]> {
   const keys = Object.keys(LOG_FORMAT);
   const formatStr = Object.values(LOG_FORMAT).join("%x01");
-  const output = (
-    await raw(args, {
-      ...deepMerge(options, withOutErr),
-      format: `format:${formatStr}`,
-      nullTerminated: true,
-    })
-  ).stdout!;
+  const result = await raw(args, {
+    ...deepMerge(options, withOutErr, noCheck),
+    format: `format:${formatStr}`,
+    nullTerminated: true,
+  });
+  if (result.checkFails() && result.stderr!.includes("does not have any commits yet")) return [];
+  const output = result.stdout!;
   if (output === "") return [];
   return output.split("\0").map((commitOut) => {
     const fields = commitOut.split("\x01");

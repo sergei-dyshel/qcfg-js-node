@@ -132,12 +132,16 @@ export class RunResult {
     return new RunError(this);
   }
 
-  check() {
-    if (
+  checkFails() {
+    return (
       (this.signalCode != null &&
         !(this.options?.allowedExitSignals ?? []).includes(this.signalCode)) ||
       (this.exitCode !== null && !(this.options?.allowedExitCodes ?? [0]).includes(this.exitCode))
-    ) {
+    );
+  }
+
+  check() {
+    if (this.checkFails()) {
       this.options?.signal?.throwIfAborted();
       throw this.checkError();
     }
