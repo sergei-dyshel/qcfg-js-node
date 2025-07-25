@@ -21,6 +21,9 @@ build-build-cmd:
 build-qcfg-build:
     tsx src/tools/qcfg-build.ts build src/tools/qcfg-build.ts
 
+build-prerequisites: build-qcfg-build
+    npx qcfg-build build src/tools/qcfg-resolve-package.ts
+
 gen-user-config-schema:
     qcfg-build run src/tools/gen-user-config-schema.ts user-config.schema.json
     prettier --write user-config.schema.json
