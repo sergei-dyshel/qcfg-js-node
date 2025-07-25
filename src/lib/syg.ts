@@ -8,7 +8,7 @@ import { dedent } from "@sergei-dyshel/typescript/string";
 import { canBeUndefined } from "@sergei-dyshel/typescript/types";
 import { createSymlink, mkdir, move, rm } from "fs-extra";
 import { appendFile, readFile, readlink, unlink, writeFile } from "fs/promises";
-import { dirname, isAbsolute } from "path";
+import { dirname, isAbsolute, join } from "path";
 import * as semver from "semver";
 import { Ssh, type Subprocess } from ".";
 import { AsyncContext } from "./async-context";
@@ -240,10 +240,14 @@ export class Syg {
     await remoteGit.commit({ message: "+", allowEmpty: true, quiet: true });
     await remoteGit.checkout([], { branchForce: BRANCH, quiet: !this.gitVerbose });
 
-    await remoteGit.setConfig("core.hooksPath", "hooks");
+    // use default hooks path (.git/hooks)
+    const gitDir = await remoteGit.gitDir();
+    const hooksPath = join(gitDir, "hooks");
+    await remoteGit.setConfig("core.hooksPath", hooksPath);
+
     const ssh = await this.remoteSsh(remoteInfo);
-    await ssh.writeFile(".git/hooks/pre-receive", preReceiveHook, { mode: 0o755 });
-    await ssh.writeFile(".git/hooks/push-to-checkout", pushToCheckoutHook, { mode: 0o755 });
+    await ssh.writeFile(join(hooksPath, "pre-receive"), preReceiveHook, { mode: 0o755 });
+    await ssh.writeFile(join(hooksPath, "push-to-checkout"), pushToCheckoutHook, { mode: 0o755 });
   }
 
   async getDefaultRemote(options: {

@@ -1,7 +1,7 @@
 import { deepMerge } from "@sergei-dyshel/typescript/deep-merge";
 import type { Subprocess } from "..";
 import * as Cmd from "../cmdline-builder";
-import { Error, HEAD, runCommand, type RunOptions, withOut, withOutErr } from "./common";
+import { Error, HEAD, noCheck, runCommand, type RunOptions, withOut, withOutErr } from "./common";
 
 export interface Options {
   /**
@@ -118,7 +118,7 @@ export async function showToplevel(options?: RunOptions & Pick<Options, "pathFor
 }
 
 /**
- * `git rev-pase --resolve-git-dir <dir>`
+ * `git rev-parse --resolve-git-dir <dir>`
  *
  * Check if <path> is a valid repository or a gitfile that points at a valid repository, and print
  * the location of the repository. If <path> is a gitfile then the resolved path to the real
@@ -132,14 +132,28 @@ export async function resolveGitDir(
 ) {
   const result = await raw(
     undefined,
-    deepMerge<Options & RunOptions>(
-      { ...options, resolveGitDir: dir },
-      { run: { check: false } },
-      withOutErr,
-    ),
+    deepMerge<Options & RunOptions>({ ...options, resolveGitDir: dir }, noCheck, withOutErr),
   );
   if (result.exitCode === 0) return result.stdout!.trimEnd();
   if (result.exitCode === 128 && result.stderr!.includes("fatal: not a gitdir"))
     throw new Error.NotAGitDir(`Directory is not a git dir: ${dir}`, { cause: result });
   throw result.checkError();
+}
+
+/**
+ * `git rev-parse --git-dir`
+ *
+ * Works properly with submodules. From docs:
+ *
+ * Show $GIT_DIR if defined. Otherwise show the path to the .git directory. The path shown, when
+ * relative, is relative to the current working directory.
+ *
+ * If $GIT_DIR is not defined and the current directory is not detected to lie in a Git repository
+ * or work tree print a message to stderr and exit with nonzero status.
+ *
+ * {@link https://git-scm.com/docs/git-rev-parse#Documentation/git-rev-parse.txt---git-dir}
+ */
+export async function gitDir(options?: RunOptions) {
+  const result = await raw("--git-dir", deepMerge<Options & RunOptions>(options, withOut));
+  return result.stdout!.trimEnd();
 }

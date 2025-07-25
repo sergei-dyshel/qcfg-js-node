@@ -65,6 +65,7 @@ export class Instance {
   revParseHead = this.wrap(RevParse.head);
   showToplevel = this.wrap(RevParse.showToplevel);
   resolveGitDir = this.wrap(RevParse.resolveGitDir);
+  gitDir = this.wrap(RevParse.gitDir);
 
   getConfig = this.wrap(Config.get);
   getConfigCustom = this.wrap(Config.getCustom);
