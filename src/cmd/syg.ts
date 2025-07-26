@@ -25,6 +25,10 @@ export { allOclifCommands, OclifHelp };
 
 const logger = RootLogger.get();
 
+const commonFlags = flagsInput({
+  cwd: Flags.string({ char: "C", summary: "Change to directory" }),
+});
+
 abstract class RootCommand extends BaseCommandWithVerbosity {
   protected declare flags: CommandFlags<typeof RootCommand>;
   protected declare args: CommandArgs<typeof RootCommand>;
@@ -32,6 +36,7 @@ abstract class RootCommand extends BaseCommandWithVerbosity {
 
   static override baseFlags = flagsInput({
     ...BaseCommandWithVerbosity.baseFlags,
+    ...commonFlags,
     silent: Flags.boolean({
       summary: "Do not fail if not in Syg directory, just silently exit",
       char: "S",
@@ -41,7 +46,10 @@ abstract class RootCommand extends BaseCommandWithVerbosity {
   public override async init() {
     await super.init();
     try {
-      this.syg = await Syg.detect({ gitVerbose: (this.flags.verbose ?? 0) >= 2 });
+      this.syg = await Syg.detect({
+        cwd: this.flags.cwd,
+        gitVerbose: (this.flags.verbose ?? 0) >= 2,
+      });
     } catch (err) {
       if (this.flags.silent && err instanceof Syg.NoSygDir) process.exit();
       throw err;
@@ -56,11 +64,12 @@ export class InitCommand extends BaseCommandWithVerbosity {
 
   static override summary = "Init syg in current directory";
   static override flags = flagsInput({
+    ...commonFlags,
     ...Flags.force({ summary: "Recreate syg dir" }),
   });
 
   override async run() {
-    const syg = new Syg();
+    const syg = new Syg({ cwd: this.flags.cwd });
     await syg.init({ force: this.flags.force });
   }
 }
