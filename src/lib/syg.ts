@@ -240,8 +240,8 @@ export class Syg {
     await remoteGit.commit({ message: "+", allowEmpty: true, quiet: true });
     await remoteGit.checkout([], { branchForce: BRANCH, quiet: !this.gitVerbose });
 
-    // use default hooks path (.git/hooks)
-    const gitDir = await remoteGit.gitDir();
+    // use default hooks path (.git/hooks), must be absolute
+    const gitDir = await remoteGit.gitDir({ pathFormat: "absolute" });
     const hooksPath = join(gitDir, "hooks");
     await remoteGit.setConfig("core.hooksPath", hooksPath);
 
@@ -671,6 +671,8 @@ const preReceiveHook = dedent`
 
 const pushToCheckoutHook = dedent`
   #!/bin/bash
+
+  set -e
 
   git reset --hard --quiet
   git read-tree -u --reset HEAD "$1"

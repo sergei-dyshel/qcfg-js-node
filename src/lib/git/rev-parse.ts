@@ -57,7 +57,7 @@ export async function raw(args?: string | string[], options?: Options & RunOptio
     {
       verify: Cmd.boolean(),
       resolveGitDir: Cmd.string(),
-      pathFormat: Cmd.string(),
+      pathFormat: Cmd.string({ equals: true }),
       showToplevel: Cmd.boolean(),
     },
     options,
@@ -153,7 +153,7 @@ export async function resolveGitDir(
  *
  * {@link https://git-scm.com/docs/git-rev-parse#Documentation/git-rev-parse.txt---git-dir}
  */
-export async function gitDir(options?: RunOptions) {
+export async function gitDir(options?: RunOptions & Pick<Options, "pathFormat">) {
   const result = await raw("--git-dir", deepMerge<Options & RunOptions>(options, withOut));
   return result.stdout!.trimEnd();
 }
