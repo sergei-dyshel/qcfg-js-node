@@ -4,6 +4,8 @@ import { assertNotNull } from "@sergei-dyshel/typescript/error";
 
 export { PackageJson };
 
+export const PACKAGE_JSON_PATH = "package.json";
+
 const DEPENDECIES_NAMES = ["dependencies", "devDependencies", "optionalDependencies"] as const;
 export type DependenciesName = (typeof DEPENDECIES_NAMES)[number];
 
